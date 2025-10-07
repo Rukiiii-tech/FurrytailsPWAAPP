@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "398290739778",
+    "firebase_url": "https://capstoneapp1-fbb0a-default-rtdb.firebaseio.com",
+    "project_id": "capstoneapp1-fbb0a",
+    "storage_bucket": "capstoneapp1-fbb0a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:398290739778:android:1348f743524820ec5cc3db",
+        "android_client_info": {
+          "package_name": "com.example.capstoneapp1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJzK8JSSRKrI1gOkMh2txXCSQu3l8gV4M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:398290739778:android:ffc91961a39ab7cd5cc3db",
+        "android_client_info": {
+          "package_name": "com.example.customer1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJzK8JSSRKrI1gOkMh2txXCSQu3l8gV4M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:398290739778:android:c3110c3d8c5c2b465cc3db",
+        "android_client_info": {
+          "package_name": "com.example.customerappli"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJzK8JSSRKrI1gOkMh2txXCSQu3l8gV4M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,34 @@
+{
+  "name": "Furry Tails Pet Care",
+  "short_name": "Furry Tails",
+  "description": "Your go-to app for pet bookings and care.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFB64A",
+  "theme_color": "#FFB64A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icons/Icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/Icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/Icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/Icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
