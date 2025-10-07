@@ -51,7 +51,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
         child: Padding(
           padding: EdgeInsets.all(16.0),
           child: Text(
-            'Please log in to view your bookings HAHAHAHA.',
+            'Please log in to view your bookings.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 18, color: Colors.grey),
           ),
