@@ -1,0 +1,13 @@
+{
+  "projects": {},
+  "targets": {
+    "furrytails-bb67e": {
+      "hosting": {
+        "pwa": [
+          "furrytailspwa"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

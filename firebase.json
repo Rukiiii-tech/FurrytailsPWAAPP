@@ -1,1 +1,11 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"capstoneapp1-fbb0a","appId":"1:398290739778:android:ffc91961a39ab7cd5cc3db","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"capstoneapp1-fbb0a","configurations":{"android":"1:398290739778:android:ffc91961a39ab7cd5cc3db","ios":"1:398290739778:ios:587af4628115d5dd5cc3db","macos":"1:398290739778:ios:587af4628115d5dd5cc3db","web":"1:398290739778:web:308217fb5f3c06ea5cc3db","windows":"1:398290739778:web:b9dce9b540ebba545cc3db"}}}}}}
+{
+  "hosting": [
+    { "public": "original-public-folder" },
+    {
+      "target": "pwa",
+      "public": "pwa-build",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    }
+  ]
+}

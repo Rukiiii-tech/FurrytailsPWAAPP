@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dart:io'; // Re-introduced for File operations
-import 'package:image_picker/image_picker.dart'; // Re-introduced for image picking
-import 'package:http/http.dart' as http; // Import the http package
-import 'dart:convert'; // For JSON encoding/decoding
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
 
 class MyPetsScreen extends StatefulWidget {
   final bool isModal;
@@ -18,7 +19,7 @@ class MyPetsScreen extends StatefulWidget {
 class _MyPetsScreenState extends State<MyPetsScreen> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final ImagePicker _picker = ImagePicker(); // Initialize ImagePicker
+  final ImagePicker _picker = ImagePicker();
 
   User? _currentUser;
   bool _showRegistrationForm = false;
@@ -26,7 +27,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   bool _isLoadingForm = false;
 
   final TextEditingController _petNameController = TextEditingController();
-  final TextEditingController _petBreedController = TextEditingController();
   final TextEditingController _petWeightController = TextEditingController();
   final TextEditingController _petBirthdateController = TextEditingController();
   final TextEditingController _foodBrandController = TextEditingController();
@@ -38,39 +38,85 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   TextEditingController _afternoonTimeController = TextEditingController();
   bool _eveningFeeding = false;
   TextEditingController _eveningTimeController = TextEditingController();
-  // NEW: Controllers for food grams
+
   final TextEditingController _morningFoodGramsController =
       TextEditingController();
   final TextEditingController _afternoonFoodGramsController =
       TextEditingController();
   final TextEditingController _eveningFoodGramsController =
       TextEditingController();
-  // NEW: Bring own food option
+
   bool _bringOwnFood = false;
 
-  // File variables to temporarily hold picked images before upload
+  // NEW CONTROLLER: To capture custom breed when 'Other' is selected
+  final TextEditingController _customPetBreedController =
+      TextEditingController();
+
   File? _vaccinationRecordImageFile;
   File? _petProfileImageFile;
 
-  // Strings to hold the *final* URLs (either existing from Firestore or newly uploaded)
   String? _vaccinationRecordImageUrl;
   String? _petProfileImageUrl;
 
+  // State variables for Dropdown values
   String? _selectedPetType;
+  // NEW STATE VARIABLE FOR BREED
+  String? _selectedPetBreed;
   String? _selectedGender;
   String? _selectedCageType;
+  String? _selectedFoodBrand;
 
-  // FIX: Pet types now only Dog and Cat as requested
+  // ADDED: State for dynamically loaded breeds and the stream listener
+  // This map will store the data fetched from Firestore: {'Dog': ['Aspin', 'Shih Tzu'], 'Cat': ['Puspin', ...]}
+  Map<String, List<String>> _availableBreeds = {};
+  late StreamSubscription<DocumentSnapshot> _breedSubscription;
+
+  // *****************************************************************
+  // FIX: ADDED HARDCODED DEFAULT BREEDS AS FALLBACK
+  // *****************************************************************
+  static const Map<String, List<String>> _defaultPetBreeds = {
+    'Dog': [
+      'Aspin (Asong Pinoy)',
+      'Shih Tzu',
+      'Labrador Retriever',
+      'Golden Retriever',
+      'Poodle (Toy/Miniature/Standard)',
+      'Pug',
+      'Pomeranian',
+      'German Shepherd',
+      'Siberian Husky',
+      'Beagle',
+      'Chihuahua',
+      'Other',
+    ],
+    'Cat': [
+      'Puspin (Pusang Pinoy)',
+      'Persian',
+      'Siamese',
+      'British Shorthair',
+      'Maine Coon',
+      'Ragdoll',
+      'Bengal',
+      'Other',
+    ],
+  };
+  // *****************************************************************
+
+  // Dropdown Item Lists
   final List<String> _petTypes = ['Dog', 'Cat'];
   final List<String> _genders = ['Male', 'Female'];
   final List<String> _cageTypes = ['Small Kennel', 'Large Kennel'];
+  final List<String> _foodBrands = [
+    'Puppy Kibble',
+    'Pedigree',
+    'Royal Canin',
+    'Acana',
+    'Premium',
+    'Other',
+  ];
 
-  // Cloudinary Configuration (REPLACE WITH YOUR ACTUAL CREDENTIALS)
-  // CLOUD_NAME is 'dlec25zve' based on your provided screenshot and previous confirmation.
-  // CLOUDINARY_UPLOAD_PRESET MUST be the exact name of your UNSIGNED upload preset from Cloudinary.
-  static const String CLOUDINARY_CLOUD_NAME = 'dlec25zve'; // Correct Cloud Name
-  static const String CLOUDINARY_UPLOAD_PRESET =
-      'pet_photo_preset'; // <--- FIX THIS TO YOUR ACTUAL PRESET NAME!
+  static const String CLOUDINARY_CLOUD_NAME = 'dlec25zve';
+  static const String CLOUDINARY_UPLOAD_PRESET = 'pet_photo_preset';
 
   @override
   void initState() {
@@ -83,12 +129,16 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         });
       }
     });
+    // Set initial breeds to defaults before listening to Firestore
+    _availableBreeds = _defaultPetBreeds;
+
+    // Call the listener function to fetch and update breeds in real-time
+    _listenToBreeds();
   }
 
   @override
   void dispose() {
     _petNameController.dispose();
-    _petBreedController.dispose();
     _petWeightController.dispose();
     _petBirthdateController.dispose();
     _foodBrandController.dispose();
@@ -96,16 +146,62 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     _morningTimeController.dispose();
     _afternoonTimeController.dispose();
     _eveningTimeController.dispose();
-    // Dispose new controllers
     _morningFoodGramsController.dispose();
     _afternoonFoodGramsController.dispose();
     _eveningFoodGramsController.dispose();
+    // ADDED: Dispose the new custom breed controller
+    _customPetBreedController.dispose();
+    // Cancel the breed subscription to prevent memory leaks
+    _breedSubscription.cancel();
     super.dispose();
+  }
+
+  // --- NEW: Firestore Listener for Breeds ---
+  void _listenToBreeds() {
+    // Reference the Firestore document where the admin updates the breeds
+    // This MUST match the document ID used in your JavaScript admin panel: 'config/petBreeds'
+    final breedRef = _firestore.collection('petsp').doc('petBreeds');
+
+    // Listen for real-time updates to the breed list
+    _breedSubscription = breedRef.snapshots().listen(
+      (snapshot) {
+        if (snapshot.exists) {
+          final data = snapshot.data();
+          if (data != null) {
+            setState(() {
+              // Convert the fetched data map<String, dynamic> to map<String, List<String>>
+              _availableBreeds = data.map(
+                (key, value) => MapEntry(key, List<String>.from(value)),
+              );
+
+              // Ensure 'Other' is present in the dynamically loaded list
+              _availableBreeds.forEach((key, value) {
+                if (!value.contains('Other')) {
+                  value.add('Other');
+                }
+              });
+            });
+            print('Breeds updated from Firestore: $_availableBreeds');
+          }
+        } else {
+          // FIX: Use the default hardcoded breeds if the Firestore document is not found.
+          setState(() {
+            _availableBreeds = _defaultPetBreeds;
+          });
+          print(
+            'Breed configuration document not found. Using default breeds.',
+          );
+        }
+      },
+      onError: (error) {
+        print('Error listening to breeds: $error');
+        // In a production app, you might show a persistent warning here
+      },
+    );
   }
 
   void _clearForm() {
     _petNameController.clear();
-    _petBreedController.clear();
     _petWeightController.clear();
     _petBirthdateController.clear();
     _foodBrandController.clear();
@@ -113,23 +209,27 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     _morningTimeController.clear();
     _afternoonTimeController.clear();
     _eveningTimeController.clear();
-    // Clear new controllers
     _morningFoodGramsController.clear();
     _afternoonFoodGramsController.clear();
     _eveningFoodGramsController.clear();
+    // ADDED: Clear the new custom breed controller
+    _customPetBreedController.clear();
 
     setState(() {
       _selectedPetType = null;
+      // Clear the selected breed
+      _selectedPetBreed = null;
       _selectedGender = null;
       _selectedCageType = null;
+      _selectedFoodBrand = null;
       _morningFeeding = false;
       _afternoonFeeding = false;
       _eveningFeeding = false;
       _bringOwnFood = false;
-      _vaccinationRecordImageFile = null; // Clear picked file
-      _petProfileImageFile = null; // Clear picked file
-      _vaccinationRecordImageUrl = null; // Clear URL
-      _petProfileImageUrl = null; // Clear URL
+      _vaccinationRecordImageFile = null;
+      _petProfileImageFile = null;
+      _vaccinationRecordImageUrl = null;
+      _petProfileImageUrl = null;
       _editingPet = null;
       _showRegistrationForm = false;
     });
@@ -139,16 +239,17 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     _editingPet = petDoc;
     final petData = petDoc.data() as Map<String, dynamic>;
 
+    final String? foodBrandFromData = petData['foodBrand'] as String?;
+    final String? petBreedFromData = petData['petBreed'] as String?;
+
     _petNameController.text = petData['petName'] ?? '';
-    _petBreedController.text = petData['petBreed'] ?? '';
     _petWeightController.text = petData['petWeight'] ?? '';
     _petBirthdateController.text = petData['dateOfBirth'] ?? '';
-    _foodBrandController.text = petData['foodBrand'] ?? '';
+    _foodBrandController.text = foodBrandFromData ?? '';
     _numberOfMealsController.text = petData['numberOfMeals'] ?? '';
     _morningTimeController.text = petData['morningTime'] ?? '';
     _afternoonTimeController.text = petData['afternoonTime'] ?? '';
     _eveningTimeController.text = petData['eveningTime'] ?? '';
-    // Prefill new food grams controllers
     _morningFoodGramsController.text = petData['morningFoodGrams'] ?? '';
     _afternoonFoodGramsController.text = petData['afternoonFoodGrams'] ?? '';
     _eveningFoodGramsController.text = petData['eveningFoodGrams'] ?? '';
@@ -157,6 +258,21 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       _selectedPetType = _petTypes.contains(petData['petType'])
           ? petData['petType']
           : null;
+
+      // Set the selected breed from the stored data
+      _selectedPetBreed = petBreedFromData;
+
+      // NEW: Logic to handle 'Other' breed during edit
+      if (petBreedFromData != null && petBreedFromData.startsWith('Other:')) {
+        // Set the dropdown to 'Other' if the stored value is a custom breed
+        _selectedPetBreed = 'Other';
+        // Extract the custom text part and set the custom controller
+        // 'Other:'.length is 6
+        _customPetBreedController.text = petBreedFromData.substring(6).trim();
+      } else {
+        _customPetBreedController.text = '';
+      }
+
       _selectedGender = _genders.contains(petData['petGender'])
           ? petData['petGender']
           : null;
@@ -164,12 +280,13 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
           ? petData['cageType']
           : null;
 
+      _selectedFoodBrand = foodBrandFromData;
+
       _morningFeeding = petData['morningFeeding'] ?? false;
       _afternoonFeeding = petData['afternoonFeeding'] ?? false;
       _eveningFeeding = petData['eveningFeeding'] ?? false;
       _bringOwnFood = petData['bringOwnFood'] ?? false;
 
-      // Prefill URLs from Firestore, but keep image files null as they are only for *new* picks
       _vaccinationRecordImageUrl = petData['vaccinationRecordImageUrl'];
       _petProfileImageUrl = petData['petProfileImageUrl'];
       _vaccinationRecordImageFile = null;
@@ -236,7 +353,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
 
   // Method to upload image to Cloudinary
   Future<String?> _uploadImageToCloudinary(File imageFile) async {
-    // Added a check for correct Cloudinary credentials
     if (CLOUDINARY_CLOUD_NAME == 'YOUR_ACTUAL_CLOUD_NAME' ||
         CLOUDINARY_UPLOAD_PRESET == 'YOUR_UNSIGNED_UPLOAD_PRESET_NAME') {
       if (mounted) {
@@ -263,7 +379,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       if (response.statusCode == 200) {
         final responseData = await response.stream.toBytes();
         final result = jsonDecode(utf8.decode(responseData));
-        return result['secure_url']; // This is the public URL
+        return result['secure_url'];
       } else {
         final responseData = await response.stream.bytesToString();
         if (mounted) {
@@ -331,7 +447,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         });
         return;
       }
-      // Validate food grams only if corresponding feeding is selected
+
       if (_morningFeeding &&
           _morningFoodGramsController.text.isNotEmpty &&
           double.tryParse(_morningFoodGramsController.text) == null) {
@@ -360,6 +476,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         return;
       }
 
+      // Handle Image Uploads... (omitted for brevity, assume success)
+
       // Handle Vaccination Record Image Upload
       String? finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
       if (_vaccinationRecordImageFile != null) {
@@ -369,7 +487,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         if (uploadedUrl != null) {
           finalVaccinationRecordImageUrl = uploadedUrl;
         } else {
-          // If upload fails, retain existing URL or null
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -377,8 +494,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
               ),
             );
           }
-          finalVaccinationRecordImageUrl =
-              _vaccinationRecordImageUrl; // Fallback to existing or null
+          finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
         }
       }
 
@@ -391,7 +507,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         if (uploadedUrl != null) {
           finalPetProfileImageUrl = uploadedUrl;
         } else {
-          // If upload fails, retain existing URL or null
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -399,38 +514,43 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
               ),
             );
           }
-          finalPetProfileImageUrl =
-              _petProfileImageUrl; // Fallback to existing or null
+          finalPetProfileImageUrl = _petProfileImageUrl;
         }
       }
+
+      // NEW LOGIC: Determine the final breed value to save
+      final String? finalPetBreed = _selectedPetBreed == 'Other'
+          ? 'Other: ${_customPetBreedController.text.trim()}'
+          : _selectedPetBreed;
 
       final Map<String, dynamic> petData = {
         'ownerUserId': currentUser.uid,
         'petName': _petNameController.text.trim(),
         'petType': _selectedPetType,
-        'petBreed': _petBreedController.text.trim(),
+        // Use the selected breed or the custom text
+        'petBreed': finalPetBreed,
         'petWeight': _petWeightController.text.trim(),
         'dateOfBirth': _petBirthdateController.text.trim(),
         'petGender': _selectedGender,
         'cageType': _selectedCageType,
-        'foodBrand': _foodBrandController.text.trim(),
+        'foodBrand': _selectedFoodBrand,
         'numberOfMeals': _numberOfMealsController.text.trim(),
         'bringOwnFood': _bringOwnFood,
         'morningFeeding': _morningFeeding,
         'morningTime': _morningTimeController.text.trim(),
         'morningFoodGrams': _morningFeeding
             ? _morningFoodGramsController.text.trim()
-            : '', // Save morning food grams
+            : '',
         'afternoonFeeding': _afternoonFeeding,
         'afternoonTime': _afternoonTimeController.text.trim(),
         'afternoonFoodGrams': _afternoonFeeding
             ? _afternoonFoodGramsController.text.trim()
-            : '', // Save afternoon food grams
+            : '',
         'eveningFeeding': _eveningFeeding,
         'eveningTime': _eveningTimeController.text.trim(),
         'eveningFoodGrams': _eveningFeeding
             ? _eveningFoodGramsController.text.trim()
-            : '', // Save evening food grams
+            : '',
         'vaccinationRecordImageUrl': finalVaccinationRecordImageUrl,
         'petProfileImageUrl': finalPetProfileImageUrl,
       };
@@ -471,7 +591,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     }
   }
 
-  // FIX: Add _showSnackBar helper function to this class
   void _showSnackBar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(
@@ -548,7 +667,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     );
   }
 
-  // NEW: _buildFoodGramsField widget
   Widget _buildFoodGramsField({
     required TextEditingController controller,
     required String labelText,
@@ -563,7 +681,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         labelText: labelText,
         labelStyle: const TextStyle(color: Colors.black),
         prefixIcon: Icon(icon, color: const Color(0xFFFFB74D)),
-        suffixText: 'grams', // Add "grams" suffix
+        suffixText: 'grams',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         filled: true,
         fillColor: Colors.deepPurple.shade50,
@@ -572,6 +690,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     );
   }
 
+  // ***************************************************************
+  // FIX: CORRECTED _buildDropdownField to prevent duplicate values
+  // ***************************************************************
   Widget _buildDropdownField({
     required String? value,
     required List<String> items,
@@ -580,10 +701,33 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     required void Function(String?) onChanged,
     String? Function(String?)? validator,
   }) {
+    // 1. Start with a mutable copy and enforce uniqueness using a Set
+    final Set<String> uniqueItemsSet = items.toSet();
+
+    // 2. Determine the display value for the dropdown state
+    String? displayValue = value;
+    if (value != null && value.startsWith('Other:')) {
+      // If it's a custom 'Other:...' value, we use 'Other' for the dropdown state
+      displayValue = 'Other';
+    }
+
+    // 3. Ensure 'Other' is always available in the set for selection (if not already there)
+    if (!uniqueItemsSet.contains('Other')) {
+      uniqueItemsSet.add('Other');
+    }
+
+    // 4. Create the final list for the items parameter
+    final List<String> finalItems = uniqueItemsSet.toList();
+
     return DropdownButtonFormField<String>(
-      value: value,
-      items: items.map((String item) {
-        return DropdownMenuItem<String>(value: item, child: Text(item));
+      // Use displayValue for the dropdown state
+      value: displayValue,
+      items: finalItems.map((String item) {
+        return DropdownMenuItem<String>(
+          // The value must be unique across all items.
+          value: item,
+          child: Text(item),
+        );
       }).toList(),
       onChanged: onChanged,
       decoration: InputDecoration(
@@ -597,6 +741,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       validator: validator,
     );
   }
+  // ***************************************************************
 
   Widget _buildCheckboxField(
     String title,
@@ -887,8 +1032,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                 onPressed: () => _pickImage(
                                   (file) => setState(() {
                                     _petProfileImageFile = file;
-                                    _petProfileImageUrl =
-                                        null; // Clear existing URL if new file is picked
+                                    _petProfileImageUrl = null;
                                   }),
                                   context,
                                 ),
@@ -914,6 +1058,11 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                       icon: Icons.category,
                       onChanged: (String? newValue) {
                         setState(() {
+                          // Clear the selected breed and custom field when the pet type changes
+                          if (newValue != _selectedPetType) {
+                            _selectedPetBreed = null;
+                            _customPetBreedController.clear();
+                          }
                           _selectedPetType = newValue;
                         });
                       },
@@ -921,6 +1070,75 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           value == null ? 'Please select pet type' : null,
                     ),
                     const SizedBox(height: 10),
+                    // START OF MODIFIED PET BREED DROPDOWN FIELD
+                    if (_selectedPetType != null)
+                      _buildDropdownField(
+                        // The buildDropdownField now handles the 'Other:...' value internally
+                        value: _selectedPetBreed,
+                        // MODIFIED: Use the LIVE _availableBreeds map fetched from Firestore
+                        // The _availableBreeds map now contains the default list as a fallback
+                        items: _availableBreeds[_selectedPetType] ?? [],
+                        labelText: 'Pet Breed',
+                        icon: Icons.merge_type,
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            // Clear custom breed if a non-Other breed is selected
+                            if (newValue != 'Other') {
+                              _customPetBreedController.clear();
+                            }
+                            _selectedPetBreed = newValue;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                            return 'Please select pet breed';
+                          }
+                          // Add validation for custom field when 'Other' is selected
+                          if (value == 'Other' &&
+                              _customPetBreedController.text.isEmpty) {
+                            return 'Please specify the breed below';
+                          }
+                          return null;
+                        },
+                      )
+                    else
+                      // Placeholder/Hint if pet type is not selected
+                      Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.merge_type, color: Colors.grey.shade400),
+                            const SizedBox(width: 15),
+                            Text(
+                              'Select Pet Type first to choose breed',
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // END OF MODIFIED PET BREED DROPDOWN FIELD
+                    const SizedBox(height: 10),
+                    // NEW: Conditional Custom Pet Breed Field
+                    if (_selectedPetBreed == 'Other')
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: 10.0,
+                        ), // Padding adjusted for placement
+                        child: _buildTextField(
+                          controller: _customPetBreedController,
+                          labelText: 'Specify Pet Breed',
+                          icon: Icons.text_fields,
+                          validator: (value) => value!.isEmpty
+                              ? 'Please specify the breed'
+                              : null,
+                        ),
+                      ),
+
                     _buildDropdownField(
                       value: _selectedGender,
                       items: _genders,
@@ -933,14 +1151,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                       },
                       validator: (value) =>
                           value == null ? 'Please select pet gender' : null,
-                    ),
-                    const SizedBox(height: 10),
-                    _buildTextField(
-                      controller: _petBreedController,
-                      labelText: 'Pet Breed',
-                      icon: Icons.merge_type,
-                      validator: (value) =>
-                          value!.isEmpty ? 'Please enter pet breed' : null,
                     ),
                     const SizedBox(height: 10),
                     _buildTextField(
@@ -980,7 +1190,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           value == null ? 'Please select cage type' : null,
                     ),
                     const SizedBox(height: 20),
-                    // Vaccination status banner
+                    // Vaccination status banner (omitted for brevity)
                     Builder(
                       builder: (context) {
                         final bool isVaccinated =
@@ -1023,6 +1233,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                     ),
                     _buildSectionTitle('Vaccination Record (Optional)'),
                     const SizedBox(height: 10),
+                    // Image upload section (omitted for brevity)
                     Center(
                       child: Column(
                         children: [
@@ -1115,8 +1326,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                             onPressed: () => _pickImage(
                               (file) => setState(() {
                                 _vaccinationRecordImageFile = file;
-                                _vaccinationRecordImageUrl =
-                                    null; // Clear existing URL if new file is picked
+                                _vaccinationRecordImageUrl = null;
                               }),
                               context,
                             ),
@@ -1136,43 +1346,19 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                     const SizedBox(height: 20),
                     _buildSectionTitle('Feeding Details (Optional)'),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      value: _foodBrandController.text.isNotEmpty
-                          ? _foodBrandController.text
-                          : null,
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'Puppy Kibble',
-                          child: Text('Puppy Kibble'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Pedigree',
-                          child: Text('Pedigree'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Royal Canin',
-                          child: Text('Royal Canin'),
-                        ),
-                        DropdownMenuItem(value: 'Acana', child: Text('Acana')),
-                      ],
+                    // Food Brand Dropdown
+                    _buildDropdownField(
+                      value: _selectedFoodBrand,
+                      items: _foodBrands,
+                      labelText: 'Preferred Food Brand',
+                      icon: Icons.fastfood,
                       onChanged: (String? newValue) {
                         setState(() {
-                          _foodBrandController.text = newValue ?? '';
+                          _selectedFoodBrand = newValue;
                         });
                       },
-                      decoration: InputDecoration(
-                        labelText: 'Preferred Food Brand',
-                        labelStyle: const TextStyle(color: Colors.black),
-                        prefixIcon: const Icon(
-                          Icons.fastfood,
-                          color: Color(0xFFFFB74D),
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        filled: true,
-                        fillColor: Colors.deepPurple.shade50,
-                      ),
+                      validator: (value) =>
+                          value == null ? 'Please select a food brand' : null,
                     ),
                     const SizedBox(height: 10),
                     _buildCheckboxField(
@@ -1358,6 +1544,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                         petData['petType'] as String? ?? 'N/A';
                     final String petBreed =
                         petData['petBreed'] as String? ?? 'N/A';
+                    // ... other fields (omitted for brevity)
+
                     final String petGender =
                         petData['petGender'] as String? ?? 'N/A';
                     final String petWeight =
@@ -1374,22 +1562,19 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                         petData['morningFeeding'] as bool? ?? false;
                     final String morningTime =
                         petData['morningTime'] as String? ?? 'N/A';
-                    final String
-                    morningFoodGrams = // Extract morning food grams
+                    final String morningFoodGrams =
                         petData['morningFoodGrams'] as String? ?? 'N/A';
                     final bool afternoonFeeding =
                         petData['afternoonFeeding'] as bool? ?? false;
                     final String afternoonTime =
                         petData['afternoonTime'] as String? ?? 'N/A';
-                    final String
-                    afternoonFoodGrams = // Extract afternoon food grams
+                    final String afternoonFoodGrams =
                         petData['afternoonFoodGrams'] as String? ?? 'N/A';
                     final bool eveningFeeding =
                         petData['eveningFeeding'] as bool? ?? false;
                     final String eveningTime =
                         petData['eveningTime'] as String? ?? 'N/A';
-                    final String
-                    eveningFoodGrams = // Extract evening food grams
+                    final String eveningFoodGrams =
                         petData['eveningFoodGrams'] as String? ?? 'N/A';
 
                     final String vaccinationRecordImageUrl =
@@ -1451,8 +1636,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
+                                        // Display Pet Breed
                                         Text(
-                                          // Only show type and breed as requested
                                           '$petType - $petBreed',
                                           style: TextStyle(
                                             color: Colors.grey.shade600,
@@ -1545,8 +1730,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                   ),
                                 ],
                               ),
-                              // REMOVED most _buildDetailRow calls from here to simplify list view
-                              // They are still available in the edit form and modal for full details.
                             ],
                           ),
                         ),

@@ -51,36 +51,36 @@ class DefaultFirebaseOptions {
     }
   }
 
-  // Configuration for your web app based on your provided details
+  // Configuration for your web app, updated with the 'furrytails-bb67e' project details
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCiP2p3gbGtcgILDfppKpuuA4Q5awURzI4',
-    appId: '1:379925509921:web:ba47588771992d293cb060',
-    messagingSenderId: '379925509921',
-    projectId: 'admin-a95e4',
-    authDomain: 'admin-a95e4.firebaseapp.com',
-    storageBucket: 'admin-a95e4.firebasestorage.app',
-    measurementId: 'G-ERG3RPY2GX',
+    apiKey: 'AIzaSyDwkilaO0lkU42PWBewZ-Bi46rjpsLnVrg',
+    appId: '1:896556655663:web:326868542f160af74a12da',
+    messagingSenderId: '896556655663',
+    projectId: 'furrytails-bb67e',
+    authDomain: 'furrytails-bb67e.firebaseapp.com',
+    storageBucket: 'furrytails-bb67e.firebasestorage.app',
+    measurementId: 'G-8K12SR15KR',
   );
 
-  // Placeholder for Android configuration - will be filled by flutterfire configure
+  // Placeholder for Android configuration - updated project details
   static const FirebaseOptions android = FirebaseOptions(
     apiKey:
         'YOUR_ANDROID_API_KEY', // <--- This will be your actual Android API Key
     appId:
-        '1:379925509921:android:xxxxxxxxxxxxxxxxxxxx', // <--- This will be your actual Android App ID
-    messagingSenderId: '379925509921',
-    projectId: 'admin-a95e4',
-    storageBucket: 'admin-a95e4.appspot.com',
+        '1:896556655663:android:xxxxxxxxxxxxxxxxxxxx', // <--- This will be your actual Android App ID
+    messagingSenderId: '896556655663',
+    projectId: 'furrytails-bb67e',
+    storageBucket: 'furrytails-bb67e.appspot.com',
   );
 
-  // Placeholder for iOS configuration - will be filled by flutterfire configure
+  // Placeholder for iOS configuration - updated project details
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'YOUR_IOS_API_KEY', // <--- This will be your actual iOS API Key
     appId:
-        '1:379925509921:ios:xxxxxxxxxxxxxxxxxxxx', // <--- This will be your actual iOS App ID
-    messagingSenderId: '379925509921',
-    projectId: 'admin-a95e4',
-    storageBucket: 'admin-a95e4.appspot.com',
+        '1:896556655663:ios:xxxxxxxxxxxxxxxxxxxx', // <--- This will be your actual iOS App ID
+    messagingSenderId: '896556655663',
+    projectId: 'furrytails-bb67e',
+    storageBucket: 'furrytails-bb67e.appspot.com',
     iosClientId: 'YOUR_IOS_CLIENT_ID',
     iosBundleId: 'com.example.customer1', // Or your actual bundle ID
   );
