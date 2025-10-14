@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:customer1/booking_details_screen.dart'; // Import to navigate to details
+import 'package:customerpwa/booking_details_screen.dart'; // Import to navigate to details
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});

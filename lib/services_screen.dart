@@ -1,10 +1,10 @@
 // services_screen.dart
 import 'package:flutter/material.dart';
-import 'package:customer1/bookings.dart'; // My Bookings
-import 'package:customer1/profile_screen.dart'; // Profile Screen
-import 'package:customer1/my_pets_screen.dart'; // My Pets Screen
-import 'package:customer1/booking_form_screen.dart'; // Booking Form Screen
-import 'package:customer1/notification_screen.dart'; // Notification Screen (accessed via AppBar icon)
+import 'package:customerpwa/bookings.dart'; // My Bookings
+import 'package:customerpwa/profile_screen.dart'; // Profile Screen
+import 'package:customerpwa/my_pets_screen.dart'; // My Pets Screen
+import 'package:customerpwa/booking_form_screen.dart'; // Booking Form Screen
+import 'package:customerpwa/notification_screen.dart'; // Notification Screen (accessed via AppBar icon)
 import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore access
 import 'package:firebase_auth/firebase_auth.dart'; // Current user
 

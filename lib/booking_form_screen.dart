@@ -4,9 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:customerap/booking_details_screen.dart';
+import 'package:customerpwa/booking_details_screen.dart';
 import 'package:intl/intl.dart';
-import 'package:customerap/my_pets_screen.dart';
+import 'package:customerpwa/my_pets_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 

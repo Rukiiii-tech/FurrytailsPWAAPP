@@ -1,5 +1,5 @@
 // main.dart
-import 'package:customer1/profile_screen.dart';
+import 'package:customerpwa/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // ADDED: For kIsWeb check
 import 'package:flutter_web_plugins/url_strategy.dart'; // ADDED: For clean web URLs
@@ -7,21 +7,21 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:customer1/firebase_options.dart'; // Use the correct import path
+import 'package:customerpwa/firebase_options.dart'; // Use the correct import path
 
 // Your screen imports
-import 'package:customer1/welcome_screen.dart';
-import 'package:customer1/login_screen.dart';
-import 'package:customer1/signup_screen.dart';
-import 'package:customer1/home_screen.dart';
-import 'package:customer1/services_screen.dart';
-import 'package:customer1/bookings.dart';
-import 'package:customer1/forgot_password_screen.dart';
-import 'package:customer1/my_pets_screen.dart';
-import 'package:customer1/my_booking_screen.dart'; // ADDED: Correct MyBookingsScreen import
-import 'package:customer1/booking_details_screen.dart';
-import 'package:customer1/notification_screen.dart';
-import 'package:customer1/notification_service.dart'; // The new notification service
+import 'package:customerpwa/welcome_screen.dart';
+import 'package:customerpwa/login_screen.dart';
+import 'package:customerpwa/signup_screen.dart';
+import 'package:customerpwa/home_screen.dart';
+import 'package:customerpwa/services_screen.dart';
+import 'package:customerpwa/bookings.dart';
+import 'package:customerpwa/forgot_password_screen.dart';
+import 'package:customerpwa/my_pets_screen.dart';
+import 'package:customerpwa/my_booking_screen.dart'; // ADDED: Correct MyBookingsScreen import
+import 'package:customerpwa/booking_details_screen.dart';
+import 'package:customerpwa/notification_screen.dart';
+import 'package:customerpwa/notification_service.dart'; // The new notification service
 
 // 1. DEFINE GLOBAL KEY FOR NAVIGATION
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

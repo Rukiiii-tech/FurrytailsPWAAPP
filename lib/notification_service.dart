@@ -3,9 +3,9 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
-import 'package:customer1/booking_details_screen.dart';
+import 'package:customerpwa/booking_details_screen.dart';
 // CRITICAL: Import the navigatorKey from main.dart
-import 'package:customer1/main.dart'; // <--- ADD THIS IMPORT
+import 'package:customerpwa/main.dart'; // <--- ADD THIS IMPORT
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
