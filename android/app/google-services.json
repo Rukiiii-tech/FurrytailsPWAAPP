@@ -1,22 +1,21 @@
 {
   "project_info": {
-    "project_number": "398290739778",
-    "firebase_url": "https://capstoneapp1-fbb0a-default-rtdb.firebaseio.com",
-    "project_id": "capstoneapp1-fbb0a",
-    "storage_bucket": "capstoneapp1-fbb0a.firebasestorage.app"
+    "project_number": "896556655663",
+    "project_id": "furrytails-bb67e",
+    "storage_bucket": "furrytails-bb67e.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:398290739778:android:1348f743524820ec5cc3db",
+        "mobilesdk_app_id": "1:896556655663:android:95d2cf432d868bb04a12da",
         "android_client_info": {
-          "package_name": "com.example.capstoneapp1"
+          "package_name": "com.example.customerap"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDJzK8JSSRKrI1gOkMh2txXCSQu3l8gV4M"
+          "current_key": "AIzaSyDL8kfsMpNHkpLSofH9ZEFXbTUMbWWYUZg"
         }
       ],
       "services": {
@@ -27,15 +26,15 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:398290739778:android:ffc91961a39ab7cd5cc3db",
+        "mobilesdk_app_id": "1:896556655663:android:be8c66a498ee47354a12da",
         "android_client_info": {
-          "package_name": "com.example.customer1"
+          "package_name": "com.example.customerpwa"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDJzK8JSSRKrI1gOkMh2txXCSQu3l8gV4M"
+          "current_key": "AIzaSyDL8kfsMpNHkpLSofH9ZEFXbTUMbWWYUZg"
         }
       ],
       "services": {
@@ -46,15 +45,53 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:398290739778:android:c3110c3d8c5c2b465cc3db",
+        "mobilesdk_app_id": "1:896556655663:android:33a73251d5bb2d1e4a12da",
         "android_client_info": {
-          "package_name": "com.example.customerappli"
+          "package_name": "com.example.facilitator"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDJzK8JSSRKrI1gOkMh2txXCSQu3l8gV4M"
+          "current_key": "AIzaSyDL8kfsMpNHkpLSofH9ZEFXbTUMbWWYUZg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:896556655663:android:43c64de5729f155b4a12da",
+        "android_client_info": {
+          "package_name": "com.example.facilitator1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDL8kfsMpNHkpLSofH9ZEFXbTUMbWWYUZg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:896556655663:android:d9cef27473812ceb4a12da",
+        "android_client_info": {
+          "package_name": "com.example.furry_tails"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDL8kfsMpNHkpLSofH9ZEFXbTUMbWWYUZg"
         }
       ],
       "services": {

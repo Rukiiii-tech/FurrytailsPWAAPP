@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:customer1/booking_details_screen.dart'; // Import BookingDetailsScreen
-import 'package:customer1/booking_form_screen.dart'; // Import the BookingFormScreen
+import 'package:customerpwa/booking_details_screen.dart'; // Import BookingDetailsScreen
+import 'package:customerpwa/booking_form_screen.dart'; // Import the BookingFormScreen
 import 'dart:async'; // Import for StreamSubscription
 
 class PetsScreen extends StatefulWidget {
