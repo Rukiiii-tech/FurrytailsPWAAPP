@@ -106,13 +106,18 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   // Dropdown Item Lists
   final List<String> _petTypes = ['Dog', 'Cat'];
   final List<String> _genders = ['Male', 'Female'];
-  final List<String> _cageTypes = ['Small Kennel', 'Large Kennel'];
+  final List<String> _cageTypes = [
+    'Small Kennel',
+    'Large Kennel',
+    'Other',
+  ]; // 'Other' is often present in these types
   final List<String> _foodBrands = [
     'Puppy Kibble',
     'Pedigree',
     'Royal Canin',
     'Acana',
     'Premium',
+    'Other', // 'Other' is often present in these types
   ];
 
   static const String CLOUDINARY_CLOUD_NAME = 'dlec25zve';
@@ -231,8 +236,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       _vaccinationRecordImageUrl = null;
       _petProfileImageUrl = null;
       _editingPet = null;
-      // NOTE: _showRegistrationForm remains true as we are dedicating this screen to the form
-      // _showRegistrationForm = false;
+      // _showRegistrationForm remains true as we are dedicating this screen to the form
     });
   }
 
@@ -694,61 +698,71 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   }
 
   // ***************************************************************
-  // FIX: MODIFIED _buildDropdownField to prevent change on specific fields
+  // FIX: MODIFIED _buildDropdownField to remove 'Other' but keep functional
   // ***************************************************************
   Widget _buildDropdownField({
     required String? value,
     required List<String> items,
     required String labelText,
     required IconData icon,
-    required void Function(String?)? onChanged, // Make onChanged nullable
+    required void Function(String?)? onChanged,
     String? Function(String?)? validator,
-    bool isDisabled = false, // NEW PARAMETER to disable selection
+    bool allowOther = true, // NEW PARAMETER to control 'Other' option
   }) {
-    // 1. Start with a mutable copy and enforce uniqueness using a Set
-    final Set<String> uniqueItemsSet = items.toSet();
-
-    // 2. Determine the display value for the dropdown state
+    // Determine the value displayed in the dropdown text field
     String? displayValue = value;
-    if (value != null && value.startsWith('Other:')) {
-      // If it's a custom 'Other:...' value, we use 'Other' for the dropdown state
+    if (value != null && value.startsWith('Other:') && !allowOther) {
+      // If the selected value is 'Other:...' but 'Other' is not allowed,
+      // we assume the user is editing an old record. Show the custom text if possible.
+      displayValue = value;
+    } else if (value != null && value.startsWith('Other:')) {
+      // If the value is a custom 'Other:...' value, use 'Other' for the dropdown state
       displayValue = 'Other';
     }
 
-    // 3. Ensure 'Other' is always available in the set for selection (primarily for Pet Breed)
-    if (!uniqueItemsSet.contains('Other')) {
-      uniqueItemsSet.add('Other');
+    // 1. Prepare the initial set of items
+    final Set<String> uniqueItemsSet = items.toSet();
+
+    // 2. Decide the final list based on the allowOther flag
+    List<String> finalItems = [];
+    if (allowOther) {
+      // For functional fields (like Pet Breed), always ensure 'Other' is an option
+      if (!uniqueItemsSet.contains('Other')) {
+        uniqueItemsSet.add('Other');
+      }
+      finalItems = uniqueItemsSet.toList();
+    } else {
+      // For restricted fields (Pet Type, Cage Type, Food Brand), remove 'Other'
+      finalItems = uniqueItemsSet.where((item) => item != 'Other').toList();
+
+      // IMPORTANT: Ensure the currently selected value is available in the list
+      // even if it was "Other" (for backward compatibility/editing).
+      if (value != null &&
+          value.startsWith('Other:') &&
+          !finalItems.contains(value)) {
+        finalItems.add(value);
+        displayValue = value; // Show the full custom value as the selection
+      }
     }
 
-    // 4. Create the final list for the items parameter
-    List<String> finalItems = uniqueItemsSet.toList();
-
-    // NEW LOGIC: If disabled, only show the current value (if one is selected)
-    if (isDisabled && displayValue != null) {
-      // If the field is disabled, only the selected value will be in the list
-      finalItems = [displayValue];
-    } else if (isDisabled) {
-      // If disabled but no value selected, the dropdown will be empty/hint only
-      finalItems = [];
-    }
+    // Sort the list for clean display (optional, but good practice)
+    finalItems.sort();
 
     return DropdownButtonFormField<String>(
       // Use displayValue for the dropdown state
       value: displayValue,
       items: finalItems.map((String item) {
-        return DropdownMenuItem<String>(
-          // The value must be unique across all items.
-          value: item,
-          child: Text(item),
-        );
+        return DropdownMenuItem<String>(value: item, child: Text(item));
       }).toList(),
-      // Set onChanged to null if disabled, otherwise use the provided handler
-      onChanged: isDisabled ? null : onChanged,
+      // The onChanged handler is now always used (NOT NULL), making the dropdown clickable
+      onChanged: onChanged,
+
+      // Always show the standard dropdown arrow, as the field is now functional
+      icon: const Icon(Icons.arrow_drop_down),
+
       decoration: InputDecoration(
         labelText: labelText,
-        labelStyle: TextStyle(
-          color: isDisabled ? Colors.grey : Colors.black,
-        ), // Gray out label if disabled
+        labelStyle: const TextStyle(color: Colors.black),
         prefixIcon: Icon(icon, color: const Color(0xFFFFB74D)),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         filled: true,
@@ -968,27 +982,31 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   ),
                   const SizedBox(height: 10),
                   // ***************************************************************
-                  // Pet Type Dropdown (Disabled to prevent changes)
+                  // Pet Type Dropdown: Functional, but 'Other' option is removed
                   // ***************************************************************
                   _buildDropdownField(
                     value: _selectedPetType,
                     items: _petTypes,
-                    labelText: 'Pet Type (Cannot be changed)',
+                    labelText: 'Pet Type',
                     icon: Icons.category,
-                    onChanged: null, // Disabled
-                    isDisabled: true, // Disabled
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        // When pet type changes, reset breed and custom breed field
+                        _selectedPetType = newValue;
+                        _selectedPetBreed = null;
+                        _customPetBreedController.clear();
+                      });
+                    },
+                    allowOther: false, // Prevents 'Other' from appearing
                     validator: (value) =>
                         value == null ? 'Please select pet type' : null,
                   ),
                   // ***************************************************************
                   const SizedBox(height: 10),
-                  // START OF MODIFIED PET BREED DROPDOWN FIELD
+                  // Pet Breed Dropdown: Functional and allows 'Other'
                   if (_selectedPetType != null)
                     _buildDropdownField(
-                      // The buildDropdownField now handles the 'Other:...' value internally
                       value: _selectedPetBreed,
-                      // MODIFIED: Use the LIVE _availableBreeds map fetched from Firestore
-                      // The _availableBreeds map now contains the default list as a fallback
                       items: _availableBreeds[_selectedPetType] ?? [],
                       labelText: 'Pet Breed',
                       icon: Icons.merge_type,
@@ -1001,6 +1019,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           _selectedPetBreed = newValue;
                         });
                       },
+                      allowOther: true, // Pet Breed allows 'Other'
                       validator: (value) {
                         if (value == null) {
                           return 'Please select pet breed';
@@ -1055,11 +1074,13 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                     items: _genders,
                     labelText: 'Pet Gender',
                     icon: Icons.transgender,
+                    // Pet Gender is NOT disabled
                     onChanged: (String? newValue) {
                       setState(() {
                         _selectedGender = newValue;
                       });
                     },
+                    allowOther: false, // No 'Other' for Gender
                     validator: (value) =>
                         value == null ? 'Please select pet gender' : null,
                   ),
@@ -1088,15 +1109,19 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   ),
                   const SizedBox(height: 10),
                   // ***************************************************************
-                  // Cage Type Dropdown (Disabled to prevent changes)
+                  // Cage Type Dropdown: Functional, but 'Other' option is removed
                   // ***************************************************************
                   _buildDropdownField(
                     value: _selectedCageType,
                     items: _cageTypes,
-                    labelText: 'Cage Type (Cannot be changed)',
+                    labelText: 'Cage Type',
                     icon: Icons.home,
-                    onChanged: null, // Disabled
-                    isDisabled: true, // Disabled
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedCageType = newValue;
+                      });
+                    },
+                    allowOther: false, // Prevents 'Other' from appearing
                     validator: (value) =>
                         value == null ? 'Please select cage type' : null,
                   ),
@@ -1259,15 +1284,19 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   _buildSectionTitle('Feeding Details (Optional)'),
                   const SizedBox(height: 10),
                   // ***************************************************************
-                  // Food Brand Dropdown (Disabled to prevent changes)
+                  // Food Brand Dropdown: Functional, but 'Other' option is removed
                   // ***************************************************************
                   _buildDropdownField(
                     value: _selectedFoodBrand,
                     items: _foodBrands,
-                    labelText: 'Preferred Food Brand (Cannot be changed)',
+                    labelText: 'Preferred Food Brand',
                     icon: Icons.fastfood,
-                    onChanged: null, // Disabled
-                    isDisabled: true, // Disabled
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedFoodBrand = newValue;
+                      });
+                    },
+                    allowOther: false, // Prevents 'Other' from appearing
                     validator: (value) =>
                         value == null ? 'Please select a food brand' : null,
                   ),
