@@ -87,7 +87,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       'Siberian Husky',
       'Beagle',
       'Chihuahua',
-      'Other',
     ],
     'Cat': [
       'Puspin (Pusang Pinoy)',
@@ -97,7 +96,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       'Maine Coon',
       'Ragdoll',
       'Bengal',
-      'Other',
     ],
   };
   // *****************************************************************
