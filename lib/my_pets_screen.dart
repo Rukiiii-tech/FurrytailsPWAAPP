@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// Note: dart:io is still used but only in a way that is compatible with Flutter's platform detection
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
@@ -58,13 +57,11 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   final TextEditingController _customPetBreedController =
       TextEditingController();
 
-  // FIX: Change File? to XFile? for universal file handling
+  // FIX: Using XFile? for universal file handling
   XFile? _vaccinationRecordXFile;
   XFile? _petProfileXFile;
 
-  // We keep File? fields for backwards compatibility with existing UI (image previews)
-  File? _vaccinationRecordImageFile;
-  File? _petProfileImageFile;
+  // REMOVED: Redundant File? fields as they are not needed for web/cross-platform logic
 
   String? _vaccinationRecordImageUrl;
   String? _petProfileImageUrl;
@@ -240,11 +237,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       _eveningFeeding = false;
       _bringOwnFood = false;
 
-      // FIX: Clear both XFile and File/URL references
+      // FIX: Clear XFile and URL references
       _vaccinationRecordXFile = null;
       _petProfileXFile = null;
-      _vaccinationRecordImageFile = null;
-      _petProfileImageFile = null;
       _vaccinationRecordImageUrl = null;
       _petProfileImageUrl = null;
 
@@ -310,11 +305,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       _vaccinationRecordImageUrl = petData['vaccinationRecordImageUrl'];
       _petProfileImageUrl = petData['petProfileImageUrl'];
 
-      // FIX: Reset XFile/File references during prefill
+      // FIX: Reset XFile references during prefill
       _vaccinationRecordXFile = null;
       _petProfileXFile = null;
-      _vaccinationRecordImageFile = null;
-      _petProfileImageFile = null;
 
       _showRegistrationForm = true;
     });
@@ -414,14 +407,20 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       if (response.statusCode == 200) {
         final responseData = await response.stream.toBytes();
         final result = jsonDecode(utf8.decode(responseData));
+        print(
+          'Cloudinary upload SUCCESS: ${result['secure_url']}',
+        ); // LOG SUCCESS
         return result['secure_url'];
       } else {
         final responseData = await response.stream.bytesToString();
+        print(
+          'Cloudinary upload FAILED: Status ${response.statusCode}, Response: $responseData',
+        ); // LOG FAILURE
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Cloudinary upload failed: ${response.statusCode}, $responseData',
+                'Cloudinary upload failed: Status ${response.statusCode}. Check console for details.',
               ),
             ),
           );
@@ -429,9 +428,12 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         return null;
       }
     } catch (e) {
+      print('Cloudinary upload ERROR: ${e.toString()}'); // LOG ERROR
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading to Cloudinary: $e')),
+          SnackBar(
+            content: Text('Error uploading to Cloudinary: ${e.toString()}'),
+          ),
         );
       }
       return null;
@@ -515,6 +517,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       // FIX: Use XFile fields for upload logic
       // ***************************************************************
       String? finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
+      // Only upload if a new file has been picked
       if (_vaccinationRecordXFile != null) {
         final uploadedUrl = await _uploadImageToCloudinary(
           _vaccinationRecordXFile!,
@@ -522,33 +525,22 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         if (uploadedUrl != null) {
           finalVaccinationRecordImageUrl = uploadedUrl;
         } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Failed to upload vaccination record image.'),
-              ),
-            );
-          }
-          // On failure, keep the old URL if editing, or null if new
-          finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
+          // If upload fails, stop the form submission and throw an error
+          throw Exception(
+            "Failed to upload vaccination record image to cloud.",
+          );
         }
       }
 
       String? finalPetProfileImageUrl = _petProfileImageUrl;
+      // Only upload if a new file has been picked
       if (_petProfileXFile != null) {
         final uploadedUrl = await _uploadImageToCloudinary(_petProfileXFile!);
         if (uploadedUrl != null) {
           finalPetProfileImageUrl = uploadedUrl;
         } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Failed to upload pet profile image.'),
-              ),
-            );
-          }
-          // On failure, keep the old URL if editing, or null if new
-          finalPetProfileImageUrl = _petProfileImageUrl;
+          // If upload fails, stop the form submission and throw an error
+          throw Exception("Failed to upload pet profile image to cloud.");
         }
       }
       // ***************************************************************
@@ -612,6 +604,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
 
       _clearForm();
     } catch (e) {
+      // Catch any error during upload or Firestore save and log it
+      print('CRITICAL SUBMISSION ERROR: ${e.toString()}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save pet: ${e.toString()}')),
@@ -955,7 +949,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                         CircleAvatar(
                           radius: 60,
                           backgroundColor: Colors.orange.shade100,
-                          // FIX: Use platform-appropriate image display
+                          // FIX: Use platform-appropriate image display (XFile)
                           backgroundImage: _petProfileXFile != null
                               ? (kIsWeb
                                     ? NetworkImage(_petProfileXFile!.path)
