@@ -2,11 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// Note: dart:io is still used but only in a way that is compatible with Flutter's platform detection
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/foundation.dart'
+    show kIsWeb; // Import for platform check
 
 class MyPetsScreen extends StatefulWidget {
   final bool isModal;
@@ -55,6 +58,11 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   final TextEditingController _customPetBreedController =
       TextEditingController();
 
+  // FIX: Change File? to XFile? for universal file handling
+  XFile? _vaccinationRecordXFile;
+  XFile? _petProfileXFile;
+
+  // We keep File? fields for backwards compatibility with existing UI (image previews)
   File? _vaccinationRecordImageFile;
   File? _petProfileImageFile;
 
@@ -231,10 +239,15 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       _afternoonFeeding = false;
       _eveningFeeding = false;
       _bringOwnFood = false;
+
+      // FIX: Clear both XFile and File/URL references
+      _vaccinationRecordXFile = null;
+      _petProfileXFile = null;
       _vaccinationRecordImageFile = null;
       _petProfileImageFile = null;
       _vaccinationRecordImageUrl = null;
       _petProfileImageUrl = null;
+
       _editingPet = null;
       // _showRegistrationForm remains true as we are dedicating this screen to the form
     });
@@ -296,6 +309,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
 
       _vaccinationRecordImageUrl = petData['vaccinationRecordImageUrl'];
       _petProfileImageUrl = petData['petProfileImageUrl'];
+
+      // FIX: Reset XFile/File references during prefill
+      _vaccinationRecordXFile = null;
+      _petProfileXFile = null;
       _vaccinationRecordImageFile = null;
       _petProfileImageFile = null;
 
@@ -337,9 +354,11 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     }
   }
 
-  // Helper method to pick image
+  // ***************************************************************
+  // FIX: MODIFIED _pickImage to return XFile and handle platform differences
+  // ***************************************************************
   Future<void> _pickImage(
-    Function(File?) onPicked,
+    Function(XFile?) onPicked, // Function now expects XFile?
     BuildContext context,
   ) async {
     final XFile? pickedFile = await _picker.pickImage(
@@ -347,7 +366,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     );
     if (pickedFile != null) {
       if (mounted) {
-        onPicked(File(pickedFile.path));
+        onPicked(pickedFile);
       }
     } else {
       if (mounted) {
@@ -358,8 +377,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     }
   }
 
-  // Method to upload image to Cloudinary
-  Future<String?> _uploadImageToCloudinary(File imageFile) async {
+  // ***************************************************************
+  // FIX: MODIFIED _uploadImageToCloudinary to use XFile and read bytes
+  // ***************************************************************
+  Future<String?> _uploadImageToCloudinary(XFile imageFile) async {
     if (CLOUDINARY_CLOUD_NAME == 'YOUR_ACTUAL_CLOUD_NAME' ||
         CLOUDINARY_UPLOAD_PRESET == 'YOUR_UNSIGNED_UPLOAD_PRESET_NAME') {
       if (mounted) {
@@ -377,9 +398,16 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     final uri = Uri.parse(
       'https://api.cloudinary.com/v1_1/$CLOUDINARY_CLOUD_NAME/image/upload',
     );
+
+    // Read the file data as bytes. This works on both web and non-web platforms.
+    final bytes = await imageFile.readAsBytes();
+
+    // Create the multipart request
     final request = http.MultipartRequest('POST', uri)
       ..fields['upload_preset'] = CLOUDINARY_UPLOAD_PRESET
-      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+      ..files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: imageFile.name),
+      );
 
     try {
       final response = await request.send();
@@ -393,7 +421,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Cloudinary upload failed: ${response.statusCode}, ${responseData}',
+                'Cloudinary upload failed: ${response.statusCode}, $responseData',
               ),
             ),
           );
@@ -483,13 +511,13 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         return;
       }
 
-      // Handle Image Uploads... (omitted for brevity, assume success)
-
-      // Handle Vaccination Record Image Upload
+      // ***************************************************************
+      // FIX: Use XFile fields for upload logic
+      // ***************************************************************
       String? finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
-      if (_vaccinationRecordImageFile != null) {
+      if (_vaccinationRecordXFile != null) {
         final uploadedUrl = await _uploadImageToCloudinary(
-          _vaccinationRecordImageFile!,
+          _vaccinationRecordXFile!,
         );
         if (uploadedUrl != null) {
           finalVaccinationRecordImageUrl = uploadedUrl;
@@ -501,16 +529,14 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
               ),
             );
           }
+          // On failure, keep the old URL if editing, or null if new
           finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
         }
       }
 
-      // Handle Pet Profile Image Upload
       String? finalPetProfileImageUrl = _petProfileImageUrl;
-      if (_petProfileImageFile != null) {
-        final uploadedUrl = await _uploadImageToCloudinary(
-          _petProfileImageFile!,
-        );
+      if (_petProfileXFile != null) {
+        final uploadedUrl = await _uploadImageToCloudinary(_petProfileXFile!);
         if (uploadedUrl != null) {
           finalPetProfileImageUrl = uploadedUrl;
         } else {
@@ -521,9 +547,11 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
               ),
             );
           }
+          // On failure, keep the old URL if editing, or null if new
           finalPetProfileImageUrl = _petProfileImageUrl;
         }
       }
+      // ***************************************************************
 
       // NEW LOGIC: Determine the final breed value to save
       final String? finalPetBreed = _selectedPetBreed == 'Other'
@@ -927,16 +955,19 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                         CircleAvatar(
                           radius: 60,
                           backgroundColor: Colors.orange.shade100,
-                          backgroundImage: _petProfileImageFile != null
-                              ? FileImage(_petProfileImageFile!)
-                                    as ImageProvider
+                          // FIX: Use platform-appropriate image display
+                          backgroundImage: _petProfileXFile != null
+                              ? (kIsWeb
+                                    ? NetworkImage(_petProfileXFile!.path)
+                                    : FileImage(File(_petProfileXFile!.path))
+                                          as ImageProvider)
                               : (_petProfileImageUrl != null &&
                                             _petProfileImageUrl!.isNotEmpty
                                         ? NetworkImage(_petProfileImageUrl!)
                                         : null)
                                     as ImageProvider?,
                           child:
-                              _petProfileImageFile == null &&
+                              _petProfileXFile == null &&
                                   (_petProfileImageUrl == null ||
                                       _petProfileImageUrl!.isEmpty)
                               ? Icon(
@@ -959,9 +990,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                 Icons.camera_alt,
                                 color: Colors.white,
                               ),
+                              // FIX: Update setState to save the XFile
                               onPressed: () => _pickImage(
-                                (file) => setState(() {
-                                  _petProfileImageFile = file;
+                                (xfile) => setState(() {
+                                  _petProfileXFile = xfile;
                                   _petProfileImageUrl = null;
                                 }),
                                 context,
@@ -1131,7 +1163,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   Builder(
                     builder: (context) {
                       final bool isVaccinated =
-                          (_vaccinationRecordImageFile != null) ||
+                          (_vaccinationRecordXFile != null) ||
                           (_vaccinationRecordImageUrl != null &&
                               _vaccinationRecordImageUrl!.isNotEmpty);
                       return Container(
@@ -1174,7 +1206,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   Center(
                     child: Column(
                       children: [
-                        if (_vaccinationRecordImageFile != null)
+                        // FIX: Use platform-appropriate image display based on XFile
+                        if (_vaccinationRecordXFile != null)
                           Stack(
                             children: [
                               Container(
@@ -1183,9 +1216,17 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(10),
                                   image: DecorationImage(
-                                    image: FileImage(
-                                      _vaccinationRecordImageFile!,
-                                    ),
+                                    image: kIsWeb
+                                        ? NetworkImage(
+                                                _vaccinationRecordXFile!.path,
+                                              )
+                                              as ImageProvider
+                                        : FileImage(
+                                                File(
+                                                  _vaccinationRecordXFile!.path,
+                                                ),
+                                              )
+                                              as ImageProvider,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
@@ -1206,7 +1247,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                     ),
                                     onPressed: () {
                                       setState(() {
-                                        _vaccinationRecordImageFile = null;
+                                        _vaccinationRecordXFile = null;
                                         _vaccinationRecordImageUrl = null;
                                       });
                                     },
@@ -1260,9 +1301,10 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           const Text('No vaccination record image selected.'),
                         const SizedBox(height: 10),
                         ElevatedButton.icon(
+                          // FIX: Update setState to save the XFile
                           onPressed: () => _pickImage(
-                            (file) => setState(() {
-                              _vaccinationRecordImageFile = file;
+                            (xfile) => setState(() {
+                              _vaccinationRecordXFile = xfile;
                               _vaccinationRecordImageUrl = null;
                             }),
                             context,
