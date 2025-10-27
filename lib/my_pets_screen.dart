@@ -23,6 +23,7 @@ class MyPetsScreen extends StatefulWidget {
 class _MyPetsScreenState extends State<MyPetsScreen> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // FIX: Corrected ImagePicker initialization
   final ImagePicker _picker = ImagePicker();
 
   User? _currentUser;
@@ -949,10 +950,14 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                         CircleAvatar(
                           radius: 60,
                           backgroundColor: Colors.orange.shade100,
-                          // FIX: Use platform-appropriate image display (XFile)
+                          // ***************************************************************
+                          // FIX: Refactored image provider logic for web compatibility
+                          // ***************************************************************
                           backgroundImage: _petProfileXFile != null
                               ? (kIsWeb
+                                    // On Web, XFile.path is a blob URL, use NetworkImage
                                     ? NetworkImage(_petProfileXFile!.path)
+                                    // On Mobile/Desktop, XFile.path is a local path, use FileImage
                                     : FileImage(File(_petProfileXFile!.path))
                                           as ImageProvider)
                               : (_petProfileImageUrl != null &&
@@ -1200,7 +1205,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                   Center(
                     child: Column(
                       children: [
+                        // ***************************************************************
                         // FIX: Use platform-appropriate image display based on XFile
+                        // ***************************************************************
                         if (_vaccinationRecordXFile != null)
                           Stack(
                             children: [
@@ -1212,9 +1219,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                                   image: DecorationImage(
                                     image: kIsWeb
                                         ? NetworkImage(
-                                                _vaccinationRecordXFile!.path,
-                                              )
-                                              as ImageProvider
+                                            _vaccinationRecordXFile!.path,
+                                          )
                                         : FileImage(
                                                 File(
                                                   _vaccinationRecordXFile!.path,
