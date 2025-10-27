@@ -87,6 +87,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       'Siberian Husky',
       'Beagle',
       'Chihuahua',
+      'Other',
     ],
     'Cat': [
       'Puspin (Pusang Pinoy)',
@@ -96,6 +97,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       'Maine Coon',
       'Ragdoll',
       'Bengal',
+      'Other',
     ],
   };
   // *****************************************************************
@@ -106,6 +108,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   final List<String> _genders = ['Male', 'Female'];
   // FIX: REMOVED 'Other' from _cageTypes
   final List<String> _cageTypes = ['Small Kennel', 'Large Kennel'];
+  // FIX: KEPT 'Other' for _foodBrands
   final List<String> _foodBrands = [
     'Puppy Kibble',
     'Pedigree',
@@ -691,9 +694,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   }
 
   // ***************************************************************
-  // FIX: CORRECTED _buildDropdownField
-  // MODIFIED: Removed logic that automatically adds 'Other' to all lists.
-  // This allows _petTypes and _cageTypes to exclude 'Other'.
+  // FIX: RE-CORRECTED _buildDropdownField logic
+  // Now, it handles the 'Other:...' custom value only for Pet Breed,
+  // and respects the exact list passed for all other dropdowns, including Food Brand.
   // ***************************************************************
   Widget _buildDropdownField({
     required String? value,
@@ -706,17 +709,17 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     // 1. Start with a mutable copy and enforce uniqueness using a Set
     final Set<String> uniqueItemsSet = items.toSet();
 
-    // 2. Determine the display value for the dropdown state.
+    // 2. Determine the display value for the dropdown state
     String? displayValue = value;
 
-    // This logic handles custom 'Other:...' values stored in the database,
-    // ensuring the dropdown displays 'Other' correctly upon editing a pet.
+    // This block specifically handles the stored custom "Other:..." value for Pet Breed.
+    // It temporarily changes the display value to 'Other' so the dropdown can find a match.
+    // This logic does NOT affect the available items (uniqueItemsSet).
     if (value != null && value.startsWith('Other:')) {
       displayValue = 'Other';
     }
 
-    // 3. Create the final list for the items parameter.
-    // The list now only contains the items provided in the 'items' parameter.
+    // 3. Create the final list for the items parameter
     final List<String> finalItems = uniqueItemsSet.toList();
 
     return DropdownButtonFormField<String>(
@@ -1051,10 +1054,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           value!.isEmpty ? 'Please enter pet name' : null,
                     ),
                     const SizedBox(height: 10),
-                    // Pet Type Dropdown
                     _buildDropdownField(
                       value: _selectedPetType,
-                      // The list no longer contains 'Other'
+                      // FIX: The list does not contain 'Other'
                       items: _petTypes,
                       labelText: 'Pet Type',
                       icon: Icons.category,
@@ -1178,10 +1180,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                           value!.isEmpty ? 'Please select pet birthdate' : null,
                     ),
                     const SizedBox(height: 10),
-                    // Cage Type Dropdown
                     _buildDropdownField(
                       value: _selectedCageType,
-                      // The list no longer contains 'Other'
+                      // FIX: The list does not contain 'Other'
                       items: _cageTypes,
                       labelText: 'Cage Type',
                       icon: Icons.home,
@@ -1353,6 +1354,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
                     // Food Brand Dropdown
                     _buildDropdownField(
                       value: _selectedFoodBrand,
+                      // FIX: The list contains 'Other' as requested
                       items: _foodBrands,
                       labelText: 'Preferred Food Brand',
                       icon: Icons.fastfood,
