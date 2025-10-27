@@ -7,13 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-import 'package:flutter/foundation.dart'
-    show kIsWeb; // Import for platform check
 
 class MyPetsScreen extends StatefulWidget {
   final bool isModal;
-  // NOTE: If you intend to use this screen only for form registration now,
-  // the 'isModal' property might become redundant.
   const MyPetsScreen({Key? key, this.isModal = false}) : super(key: key);
 
   @override
@@ -23,12 +19,10 @@ class MyPetsScreen extends StatefulWidget {
 class _MyPetsScreenState extends State<MyPetsScreen> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  // FIX: Corrected ImagePicker initialization
   final ImagePicker _picker = ImagePicker();
 
   User? _currentUser;
-  // MODIFIED: _showRegistrationForm is set to true on init, and no longer used for toggling.
-  bool _showRegistrationForm = true;
+  bool _showRegistrationForm = false;
   DocumentSnapshot? _editingPet;
   bool _isLoadingForm = false;
 
@@ -58,11 +52,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   final TextEditingController _customPetBreedController =
       TextEditingController();
 
-  // FIX: Using XFile? for universal file handling
-  XFile? _vaccinationRecordXFile;
-  XFile? _petProfileXFile;
-
-  // REMOVED: Redundant File? fields as they are not needed for web/cross-platform logic
+  File? _vaccinationRecordImageFile;
+  File? _petProfileImageFile;
 
   String? _vaccinationRecordImageUrl;
   String? _petProfileImageUrl;
@@ -96,6 +87,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       'Siberian Husky',
       'Beagle',
       'Chihuahua',
+      'Other',
     ],
     'Cat': [
       'Puspin (Pusang Pinoy)',
@@ -105,25 +97,24 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       'Maine Coon',
       'Ragdoll',
       'Bengal',
+      'Other',
     ],
   };
   // *****************************************************************
 
   // Dropdown Item Lists
+  // FIX: REMOVED 'Other' from _petTypes
   final List<String> _petTypes = ['Dog', 'Cat'];
   final List<String> _genders = ['Male', 'Female'];
-  final List<String> _cageTypes = [
-    'Small Kennel',
-    'Large Kennel',
-    'Other',
-  ]; // 'Other' is often present in these types
+  // FIX: REMOVED 'Other' from _cageTypes
+  final List<String> _cageTypes = ['Small Kennel', 'Large Kennel'];
   final List<String> _foodBrands = [
     'Puppy Kibble',
     'Pedigree',
     'Royal Canin',
     'Acana',
     'Premium',
-    'Other', // 'Other' is often present in these types
+    'Other',
   ];
 
   static const String CLOUDINARY_CLOUD_NAME = 'dlec25zve';
@@ -237,20 +228,15 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       _afternoonFeeding = false;
       _eveningFeeding = false;
       _bringOwnFood = false;
-
-      // FIX: Clear XFile and URL references
-      _vaccinationRecordXFile = null;
-      _petProfileXFile = null;
+      _vaccinationRecordImageFile = null;
+      _petProfileImageFile = null;
       _vaccinationRecordImageUrl = null;
       _petProfileImageUrl = null;
-
       _editingPet = null;
-      // _showRegistrationForm remains true as we are dedicating this screen to the form
+      _showRegistrationForm = false;
     });
   }
 
-  // NOTE: This function is now redundant as we removed the pet list, but it's kept
-  // in case the user's workflow still relies on starting with a prefilled form.
   void _prefillFormForEdit(DocumentSnapshot petDoc) {
     _editingPet = petDoc;
     final petData = petDoc.data() as Map<String, dynamic>;
@@ -305,10 +291,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
 
       _vaccinationRecordImageUrl = petData['vaccinationRecordImageUrl'];
       _petProfileImageUrl = petData['petProfileImageUrl'];
-
-      // FIX: Reset XFile references during prefill
-      _vaccinationRecordXFile = null;
-      _petProfileXFile = null;
+      _vaccinationRecordImageFile = null;
+      _petProfileImageFile = null;
 
       _showRegistrationForm = true;
     });
@@ -348,11 +332,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     }
   }
 
-  // ***************************************************************
-  // FIX: MODIFIED _pickImage to return XFile and handle platform differences
-  // ***************************************************************
+  // Helper method to pick image
   Future<void> _pickImage(
-    Function(XFile?) onPicked, // Function now expects XFile?
+    Function(File?) onPicked,
     BuildContext context,
   ) async {
     final XFile? pickedFile = await _picker.pickImage(
@@ -360,7 +342,7 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     );
     if (pickedFile != null) {
       if (mounted) {
-        onPicked(pickedFile);
+        onPicked(File(pickedFile.path));
       }
     } else {
       if (mounted) {
@@ -371,10 +353,8 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     }
   }
 
-  // ***************************************************************
-  // FIX: MODIFIED _uploadImageToCloudinary to use XFile and read bytes
-  // ***************************************************************
-  Future<String?> _uploadImageToCloudinary(XFile imageFile) async {
+  // Method to upload image to Cloudinary
+  Future<String?> _uploadImageToCloudinary(File imageFile) async {
     if (CLOUDINARY_CLOUD_NAME == 'YOUR_ACTUAL_CLOUD_NAME' ||
         CLOUDINARY_UPLOAD_PRESET == 'YOUR_UNSIGNED_UPLOAD_PRESET_NAME') {
       if (mounted) {
@@ -392,36 +372,23 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     final uri = Uri.parse(
       'https://api.cloudinary.com/v1_1/$CLOUDINARY_CLOUD_NAME/image/upload',
     );
-
-    // Read the file data as bytes. This works on both web and non-web platforms.
-    final bytes = await imageFile.readAsBytes();
-
-    // Create the multipart request
     final request = http.MultipartRequest('POST', uri)
       ..fields['upload_preset'] = CLOUDINARY_UPLOAD_PRESET
-      ..files.add(
-        http.MultipartFile.fromBytes('file', bytes, filename: imageFile.name),
-      );
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
     try {
       final response = await request.send();
       if (response.statusCode == 200) {
         final responseData = await response.stream.toBytes();
         final result = jsonDecode(utf8.decode(responseData));
-        print(
-          'Cloudinary upload SUCCESS: ${result['secure_url']}',
-        ); // LOG SUCCESS
         return result['secure_url'];
       } else {
         final responseData = await response.stream.bytesToString();
-        print(
-          'Cloudinary upload FAILED: Status ${response.statusCode}, Response: $responseData',
-        ); // LOG FAILURE
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Cloudinary upload failed: Status ${response.statusCode}. Check console for details.',
+                'Cloudinary upload failed: ${response.statusCode}, ${responseData}',
               ),
             ),
           );
@@ -429,12 +396,9 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         return null;
       }
     } catch (e) {
-      print('Cloudinary upload ERROR: ${e.toString()}'); // LOG ERROR
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error uploading to Cloudinary: ${e.toString()}'),
-          ),
+          SnackBar(content: Text('Error uploading to Cloudinary: $e')),
         );
       }
       return null;
@@ -514,37 +478,47 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
         return;
       }
 
-      // ***************************************************************
-      // FIX: Use XFile fields for upload logic
-      // ***************************************************************
+      // Handle Image Uploads... (omitted for brevity, assume success)
+
+      // Handle Vaccination Record Image Upload
       String? finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
-      // Only upload if a new file has been picked
-      if (_vaccinationRecordXFile != null) {
+      if (_vaccinationRecordImageFile != null) {
         final uploadedUrl = await _uploadImageToCloudinary(
-          _vaccinationRecordXFile!,
+          _vaccinationRecordImageFile!,
         );
         if (uploadedUrl != null) {
           finalVaccinationRecordImageUrl = uploadedUrl;
         } else {
-          // If upload fails, stop the form submission and throw an error
-          throw Exception(
-            "Failed to upload vaccination record image to cloud.",
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to upload vaccination record image.'),
+              ),
+            );
+          }
+          finalVaccinationRecordImageUrl = _vaccinationRecordImageUrl;
         }
       }
 
+      // Handle Pet Profile Image Upload
       String? finalPetProfileImageUrl = _petProfileImageUrl;
-      // Only upload if a new file has been picked
-      if (_petProfileXFile != null) {
-        final uploadedUrl = await _uploadImageToCloudinary(_petProfileXFile!);
+      if (_petProfileImageFile != null) {
+        final uploadedUrl = await _uploadImageToCloudinary(
+          _petProfileImageFile!,
+        );
         if (uploadedUrl != null) {
           finalPetProfileImageUrl = uploadedUrl;
         } else {
-          // If upload fails, stop the form submission and throw an error
-          throw Exception("Failed to upload pet profile image to cloud.");
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to upload pet profile image.'),
+              ),
+            );
+          }
+          finalPetProfileImageUrl = _petProfileImageUrl;
         }
       }
-      // ***************************************************************
 
       // NEW LOGIC: Determine the final breed value to save
       final String? finalPetBreed = _selectedPetBreed == 'Other'
@@ -605,8 +579,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
 
       _clearForm();
     } catch (e) {
-      // Catch any error during upload or Firestore save and log it
-      print('CRITICAL SUBMISSION ERROR: ${e.toString()}');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save pet: ${e.toString()}')),
@@ -721,68 +693,45 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
   }
 
   // ***************************************************************
-  // FIX: MODIFIED _buildDropdownField to remove 'Other' but keep functional
+  // FIX: CORRECTED _buildDropdownField
+  // MODIFIED: Removed logic that automatically adds 'Other' to all lists.
+  // This allows _petTypes and _cageTypes to exclude 'Other'.
   // ***************************************************************
   Widget _buildDropdownField({
     required String? value,
     required List<String> items,
     required String labelText,
     required IconData icon,
-    required void Function(String?)? onChanged,
+    required void Function(String?) onChanged,
     String? Function(String?)? validator,
-    bool allowOther = true, // NEW PARAMETER to control 'Other' option
   }) {
-    // Determine the value displayed in the dropdown text field
+    // 1. Start with a mutable copy and enforce uniqueness using a Set
+    final Set<String> uniqueItemsSet = items.toSet();
+
+    // 2. Determine the display value for the dropdown state.
     String? displayValue = value;
-    if (value != null && value.startsWith('Other:') && !allowOther) {
-      // If the selected value is 'Other:...' but 'Other' is not allowed,
-      // we assume the user is editing an old record. Show the custom text if possible.
-      displayValue = value;
-    } else if (value != null && value.startsWith('Other:')) {
-      // If the value is a custom 'Other:...' value, use 'Other' for the dropdown state
+
+    // This logic handles custom 'Other:...' values stored in the database,
+    // ensuring the dropdown displays 'Other' correctly upon editing a pet.
+    if (value != null && value.startsWith('Other:')) {
       displayValue = 'Other';
     }
 
-    // 1. Prepare the initial set of items
-    final Set<String> uniqueItemsSet = items.toSet();
-
-    // 2. Decide the final list based on the allowOther flag
-    List<String> finalItems = [];
-    if (allowOther) {
-      // For functional fields (like Pet Breed), always ensure 'Other' is an option
-      if (!uniqueItemsSet.contains('Other')) {
-        uniqueItemsSet.add('Other');
-      }
-      finalItems = uniqueItemsSet.toList();
-    } else {
-      // For restricted fields (Pet Type, Cage Type, Food Brand), remove 'Other'
-      finalItems = uniqueItemsSet.where((item) => item != 'Other').toList();
-
-      // IMPORTANT: Ensure the currently selected value is available in the list
-      // even if it was "Other" (for backward compatibility/editing).
-      if (value != null &&
-          value.startsWith('Other:') &&
-          !finalItems.contains(value)) {
-        finalItems.add(value);
-        displayValue = value; // Show the full custom value as the selection
-      }
-    }
-
-    // Sort the list for clean display (optional, but good practice)
-    finalItems.sort();
+    // 3. Create the final list for the items parameter.
+    // The list now only contains the items provided in the 'items' parameter.
+    final List<String> finalItems = uniqueItemsSet.toList();
 
     return DropdownButtonFormField<String>(
       // Use displayValue for the dropdown state
       value: displayValue,
       items: finalItems.map((String item) {
-        return DropdownMenuItem<String>(value: item, child: Text(item));
+        return DropdownMenuItem<String>(
+          // The value must be unique across all items.
+          value: item,
+          child: Text(item),
+        );
       }).toList(),
-      // The onChanged handler is now always used (NOT NULL), making the dropdown clickable
       onChanged: onChanged,
-
-      // Always show the standard dropdown arrow, as the field is now functional
-      icon: const Icon(Icons.arrow_drop_down),
-
       decoration: InputDecoration(
         labelText: labelText,
         labelStyle: const TextStyle(color: Colors.black),
@@ -832,7 +781,6 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
     );
   }
 
-  // NOTE: This function is now redundant as we removed the pet list display.
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -894,608 +842,917 @@ class _MyPetsScreenState extends State<MyPetsScreen> {
       }
     }
 
-    // MODIFIED: We only render the form content now.
     final Widget mainContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Keep the Cancel button, as it performs form cleanup
-              ElevatedButton.icon(
-                onPressed: _clearForm,
-                icon: const Icon(
-                  Icons.cancel_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                label: const Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.white, fontSize: 15),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // This Expanded widget now directly contains the form
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _buildSectionTitle(
-                    _editingPet == null
-                        ? 'Register New Pet'
-                        : 'Edit Pet Profile',
-                  ),
-                  const SizedBox(height: 10),
-                  Center(
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundColor: Colors.orange.shade100,
-                          // ***************************************************************
-                          // FIX: Refactored image provider logic for web compatibility
-                          // ***************************************************************
-                          backgroundImage: _petProfileXFile != null
-                              ? (kIsWeb
-                                    // On Web, XFile.path is a blob URL, use NetworkImage
-                                    ? NetworkImage(_petProfileXFile!.path)
-                                    // On Mobile/Desktop, XFile.path is a local path, use FileImage
-                                    : FileImage(File(_petProfileXFile!.path))
-                                          as ImageProvider)
-                              : (_petProfileImageUrl != null &&
-                                            _petProfileImageUrl!.isNotEmpty
-                                        ? NetworkImage(_petProfileImageUrl!)
-                                        : null)
-                                    as ImageProvider?,
-                          child:
-                              _petProfileXFile == null &&
-                                  (_petProfileImageUrl == null ||
-                                      _petProfileImageUrl!.isEmpty)
-                              ? Icon(
-                                  Icons.pets,
-                                  size: 80,
-                                  color: Colors.orange.shade700,
-                                )
-                              : null,
+        StreamBuilder<QuerySnapshot>(
+          stream: _firestore
+              .collection('petsp')
+              .where('ownerUserId', isEqualTo: _currentUser!.uid)
+              .orderBy('registeredAt', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            bool hasRegisteredPets =
+                snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+
+            if (_showRegistrationForm) {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _clearForm,
+                      icon: const Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      label: const Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.white, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade700,
-                              shape: BoxShape.circle,
-                            ),
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                              ),
-                              // FIX: Update setState to save the XFile
-                              onPressed: () => _pickImage(
-                                (xfile) => setState(() {
-                                  _petProfileXFile = xfile;
-                                  _petProfileImageUrl = null;
-                                }),
-                                context,
-                              ),
-                            ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else if (!hasRegisteredPets) {
+              return Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.pets_outlined,
+                      size: 60,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'No pet profiles found.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Tap "Add New Pet" to register your furry friend!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _clearForm();
+                            _showRegistrationForm = true;
+                          });
+                        },
+                        icon: const Icon(
+                          Icons.add_circle_outline,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        label: const Text(
+                          'Add New Pet',
+                          style: TextStyle(color: Colors.white, fontSize: 15),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade700,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildTextField(
-                    controller: _petNameController,
-                    labelText: 'Pet Name',
-                    icon: Icons.pets,
-                    validator: (value) =>
-                        value!.isEmpty ? 'Please enter pet name' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  // ***************************************************************
-                  // Pet Type Dropdown: Functional, but 'Other' option is removed
-                  // ***************************************************************
-                  _buildDropdownField(
-                    value: _selectedPetType,
-                    items: _petTypes,
-                    labelText: 'Pet Type',
-                    icon: Icons.category,
-                    onChanged: (String? newValue) {
+                  ],
+                ),
+              );
+            } else {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Center(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
                       setState(() {
-                        // When pet type changes, reset breed and custom breed field
-                        _selectedPetType = newValue;
-                        _selectedPetBreed = null;
-                        _customPetBreedController.clear();
+                        _clearForm();
+                        _showRegistrationForm = true;
                       });
                     },
-                    allowOther: false, // Prevents 'Other' from appearing
-                    validator: (value) =>
-                        value == null ? 'Please select pet type' : null,
-                  ),
-                  // ***************************************************************
-                  const SizedBox(height: 10),
-                  // Pet Breed Dropdown: Functional and allows 'Other'
-                  if (_selectedPetType != null)
-                    _buildDropdownField(
-                      value: _selectedPetBreed,
-                      items: _availableBreeds[_selectedPetType] ?? [],
-                      labelText: 'Pet Breed',
-                      icon: Icons.merge_type,
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          // Clear custom breed if a non-Other breed is selected
-                          if (newValue != 'Other') {
-                            _customPetBreedController.clear();
-                          }
-                          _selectedPetBreed = newValue;
-                        });
-                      },
-                      allowOther: true, // Pet Breed allows 'Other'
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Please select pet breed';
-                        }
-                        // Add validation for custom field when 'Other' is selected
-                        if (value == 'Other' &&
-                            _customPetBreedController.text.isEmpty) {
-                          return 'Please specify the breed below';
-                        }
-                        return null;
-                      },
-                    )
-                  else
-                    // Placeholder/Hint if pet type is not selected
-                    Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.shade50,
+                    icon: const Icon(
+                      Icons.add_circle_outline,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    label: const Text(
+                      'Add New Pet',
+                      style: TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade700,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Row(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+          },
+        ),
+        if (_showRegistrationForm)
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _buildSectionTitle(
+                      _editingPet == null
+                          ? 'Register New Pet'
+                          : 'Edit Pet Profile',
+                    ),
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Stack(
                         children: [
-                          Icon(Icons.merge_type, color: Colors.grey.shade400),
-                          const SizedBox(width: 15),
-                          Text(
-                            'Select Pet Type first to choose breed',
-                            style: TextStyle(color: Colors.grey.shade600),
+                          CircleAvatar(
+                            radius: 60,
+                            backgroundColor: Colors.orange.shade100,
+                            backgroundImage: _petProfileImageFile != null
+                                ? FileImage(_petProfileImageFile!)
+                                      as ImageProvider
+                                : (_petProfileImageUrl != null &&
+                                              _petProfileImageUrl!.isNotEmpty
+                                          ? NetworkImage(_petProfileImageUrl!)
+                                          : null)
+                                      as ImageProvider?,
+                            child:
+                                _petProfileImageFile == null &&
+                                    (_petProfileImageUrl == null ||
+                                        _petProfileImageUrl!.isEmpty)
+                                ? Icon(
+                                    Icons.pets,
+                                    size: 80,
+                                    color: Colors.orange.shade700,
+                                  )
+                                : null,
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade700,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.camera_alt,
+                                  color: Colors.white,
+                                ),
+                                onPressed: () => _pickImage(
+                                  (file) => setState(() {
+                                    _petProfileImageFile = file;
+                                    _petProfileImageUrl = null;
+                                  }),
+                                  context,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  // END OF MODIFIED PET BREED DROPDOWN FIELD
-                  const SizedBox(height: 10),
-                  // NEW: Conditional Custom Pet Breed Field
-                  if (_selectedPetBreed == 'Other')
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: 10.0,
-                      ), // Padding adjusted for placement
-                      child: _buildTextField(
-                        controller: _customPetBreedController,
-                        labelText: 'Specify Pet Breed',
-                        icon: Icons.text_fields,
-                        validator: (value) =>
-                            value!.isEmpty ? 'Please specify the breed' : null,
-                      ),
+                    const SizedBox(height: 20),
+                    _buildTextField(
+                      controller: _petNameController,
+                      labelText: 'Pet Name',
+                      icon: Icons.pets,
+                      validator: (value) =>
+                          value!.isEmpty ? 'Please enter pet name' : null,
                     ),
-
-                  _buildDropdownField(
-                    value: _selectedGender,
-                    items: _genders,
-                    labelText: 'Pet Gender',
-                    icon: Icons.transgender,
-                    // Pet Gender is NOT disabled
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        _selectedGender = newValue;
-                      });
-                    },
-                    allowOther: false, // No 'Other' for Gender
-                    validator: (value) =>
-                        value == null ? 'Please select pet gender' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  _buildTextField(
-                    controller: _petWeightController,
-                    labelText: 'Pet Weight (kg)',
-                    icon: Icons.monitor_weight,
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value!.isEmpty) return 'Please enter pet weight';
-                      if (double.tryParse(value) == null) {
-                        return 'Please enter a valid number';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _buildDateField(
-                    context,
-                    controller: _petBirthdateController,
-                    labelText: 'Date of Birth',
-                    icon: Icons.calendar_today,
-                    validator: (value) =>
-                        value!.isEmpty ? 'Please select pet birthdate' : null,
-                  ),
-                  const SizedBox(height: 10),
-                  // ***************************************************************
-                  // Cage Type Dropdown: Functional, but 'Other' option is removed
-                  // ***************************************************************
-                  _buildDropdownField(
-                    value: _selectedCageType,
-                    items: _cageTypes,
-                    labelText: 'Cage Type',
-                    icon: Icons.home,
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        _selectedCageType = newValue;
-                      });
-                    },
-                    allowOther: false, // Prevents 'Other' from appearing
-                    validator: (value) =>
-                        value == null ? 'Please select cage type' : null,
-                  ),
-                  // ***************************************************************
-                  const SizedBox(height: 20),
-                  // Vaccination status banner (omitted for brevity)
-                  Builder(
-                    builder: (context) {
-                      final bool isVaccinated =
-                          (_vaccinationRecordXFile != null) ||
-                          (_vaccinationRecordImageUrl != null &&
-                              _vaccinationRecordImageUrl!.isNotEmpty);
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 16,
-                        ),
-                        margin: const EdgeInsets.only(bottom: 12),
+                    const SizedBox(height: 10),
+                    // Pet Type Dropdown
+                    _buildDropdownField(
+                      value: _selectedPetType,
+                      // The list no longer contains 'Other'
+                      items: _petTypes,
+                      labelText: 'Pet Type',
+                      icon: Icons.category,
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          // Clear the selected breed and custom field when the pet type changes
+                          if (newValue != _selectedPetType) {
+                            _selectedPetBreed = null;
+                            _customPetBreedController.clear();
+                          }
+                          _selectedPetType = newValue;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select pet type' : null,
+                    ),
+                    const SizedBox(height: 10),
+                    // START OF MODIFIED PET BREED DROPDOWN FIELD
+                    if (_selectedPetType != null)
+                      _buildDropdownField(
+                        // The buildDropdownField now handles the 'Other:...' value internally
+                        value: _selectedPetBreed,
+                        // MODIFIED: Use the LIVE _availableBreeds map fetched from Firestore
+                        // The _availableBreeds map now contains the default list as a fallback
+                        items: _availableBreeds[_selectedPetType] ?? [],
+                        labelText: 'Pet Breed',
+                        icon: Icons.merge_type,
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            // Clear custom breed if a non-Other breed is selected
+                            if (newValue != 'Other') {
+                              _customPetBreedController.clear();
+                            }
+                            _selectedPetBreed = newValue;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null) {
+                            return 'Please select pet breed';
+                          }
+                          // Add validation for custom field when 'Other' is selected
+                          if (value == 'Other' &&
+                              _customPetBreedController.text.isEmpty) {
+                            return 'Please specify the breed below';
+                          }
+                          return null;
+                        },
+                      )
+                    else
+                      // Placeholder/Hint if pet type is not selected
+                      Container(
+                        padding: const EdgeInsets.all(15),
                         decoration: BoxDecoration(
-                          color: isVaccinated ? Colors.green : Colors.red,
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.deepPurple.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade300),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              isVaccinated ? Icons.verified : Icons.warning,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 8),
+                            Icon(Icons.merge_type, color: Colors.grey.shade400),
+                            const SizedBox(width: 15),
                             Text(
-                              isVaccinated
-                                  ? 'Vaccinated (Record Provided)'
-                                  : 'Not Vaccinated (No Record)',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              'Select Pet Type first to choose breed',
+                              style: TextStyle(color: Colors.grey.shade600),
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
-                  _buildSectionTitle('Vaccination Record (Optional)'),
-                  const SizedBox(height: 10),
-                  // Image upload section (omitted for brevity)
-                  Center(
-                    child: Column(
-                      children: [
-                        // ***************************************************************
-                        // FIX: Use platform-appropriate image display based on XFile
-                        // ***************************************************************
-                        if (_vaccinationRecordXFile != null)
-                          Stack(
-                            children: [
-                              Container(
-                                height: 150,
-                                width: 150,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  image: DecorationImage(
-                                    image: kIsWeb
-                                        ? NetworkImage(
-                                            _vaccinationRecordXFile!.path,
-                                          )
-                                        : FileImage(
-                                                File(
-                                                  _vaccinationRecordXFile!.path,
-                                                ),
-                                              )
-                                              as ImageProvider,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 5,
-                                right: 5,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.8),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _vaccinationRecordXFile = null;
-                                        _vaccinationRecordImageUrl = null;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else if (_vaccinationRecordImageUrl != null &&
-                            _vaccinationRecordImageUrl!.isNotEmpty)
-                          Stack(
-                            children: [
-                              Container(
-                                height: 150,
-                                width: 150,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  image: DecorationImage(
-                                    image: NetworkImage(
-                                      _vaccinationRecordImageUrl!,
-                                    ),
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 5,
-                                right: 5,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.8),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _vaccinationRecordImageUrl = null;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          const Text('No vaccination record image selected.'),
-                        const SizedBox(height: 10),
-                        ElevatedButton.icon(
-                          // FIX: Update setState to save the XFile
-                          onPressed: () => _pickImage(
-                            (xfile) => setState(() {
-                              _vaccinationRecordXFile = xfile;
-                              _vaccinationRecordImageUrl = null;
-                            }),
-                            context,
-                          ),
-                          icon: const Icon(Icons.upload_file),
-                          label: const Text('Upload Vaccination Record'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange.shade700,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                      ),
+                    // END OF MODIFIED PET BREED DROPDOWN FIELD
+                    const SizedBox(height: 10),
+                    // NEW: Conditional Custom Pet Breed Field
+                    if (_selectedPetBreed == 'Other')
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: 10.0,
+                        ), // Padding adjusted for placement
+                        child: _buildTextField(
+                          controller: _customPetBreedController,
+                          labelText: 'Specify Pet Breed',
+                          icon: Icons.text_fields,
+                          validator: (value) => value!.isEmpty
+                              ? 'Please specify the breed'
+                              : null,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildSectionTitle('Feeding Details (Optional)'),
-                  const SizedBox(height: 10),
-                  // ***************************************************************
-                  // Food Brand Dropdown: Functional, but 'Other' option is removed
-                  // ***************************************************************
-                  _buildDropdownField(
-                    value: _selectedFoodBrand,
-                    items: _foodBrands,
-                    labelText: 'Preferred Food Brand',
-                    icon: Icons.fastfood,
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        _selectedFoodBrand = newValue;
-                      });
-                    },
-                    allowOther: false, // Prevents 'Other' from appearing
-                    validator: (value) =>
-                        value == null ? 'Please select a food brand' : null,
-                  ),
-                  // ***************************************************************
-                  const SizedBox(height: 10),
-                  _buildCheckboxField(
-                    'I will bring my pet\'s own food',
-                    _bringOwnFood,
-                    (bool? newValue) {
-                      setState(() {
-                        _bringOwnFood = newValue ?? false;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _buildTextField(
-                    controller: _numberOfMealsController,
-                    labelText: 'Number of Meals per day',
-                    icon: Icons.format_list_numbered,
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value!.isNotEmpty && double.tryParse(value) == null) {
-                        return 'Please enter a valid number, or leave empty.';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  _buildCheckboxField('Morning Feeding', _morningFeeding, (
-                    bool? newValue,
-                  ) {
-                    setState(() {
-                      _morningFeeding = newValue!;
-                    });
-                  }),
-                  if (_morningFeeding) ...[
-                    _buildTimeField(
-                      context,
-                      _morningTimeController,
-                      'Morning Time',
-                      Icons.access_time,
+                      ),
+
+                    _buildDropdownField(
+                      value: _selectedGender,
+                      items: _genders,
+                      labelText: 'Pet Gender',
+                      icon: Icons.transgender,
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedGender = newValue;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select pet gender' : null,
                     ),
                     const SizedBox(height: 10),
-                    _buildFoodGramsField(
-                      controller: _morningFoodGramsController,
-                      labelText: 'Morning Food Grams',
-                      icon: Icons.scale,
+                    _buildTextField(
+                      controller: _petWeightController,
+                      labelText: 'Pet Weight (kg)',
+                      icon: Icons.monitor_weight,
+                      keyboardType: TextInputType.number,
                       validator: (value) {
-                        if (value!.isNotEmpty &&
-                            double.tryParse(value) == null) {
-                          return 'Please enter a valid number.';
+                        if (value!.isEmpty) return 'Please enter pet weight';
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter a valid number';
                         }
                         return null;
                       },
                     ),
-                  ],
-                  const SizedBox(height: 10),
-                  _buildCheckboxField('Afternoon Feeding', _afternoonFeeding, (
-                    bool? newValue,
-                  ) {
-                    setState(() {
-                      _afternoonFeeding = newValue!;
-                    });
-                  }),
-                  if (_afternoonFeeding) ...[
-                    _buildTimeField(
+                    const SizedBox(height: 10),
+                    _buildDateField(
                       context,
-                      _afternoonTimeController,
-                      'Afternoon Time',
-                      Icons.access_time,
+                      controller: _petBirthdateController,
+                      labelText: 'Date of Birth',
+                      icon: Icons.calendar_today,
+                      validator: (value) =>
+                          value!.isEmpty ? 'Please select pet birthdate' : null,
                     ),
                     const SizedBox(height: 10),
-                    _buildFoodGramsField(
-                      controller: _afternoonFoodGramsController,
-                      labelText: 'Afternoon Food Grams',
-                      icon: Icons.scale,
-                      validator: (value) {
-                        if (value!.isNotEmpty &&
-                            double.tryParse(value) == null) {
-                          return 'Please enter a valid number.';
-                        }
-                        return null;
+                    // Cage Type Dropdown
+                    _buildDropdownField(
+                      value: _selectedCageType,
+                      // The list no longer contains 'Other'
+                      items: _cageTypes,
+                      labelText: 'Cage Type',
+                      icon: Icons.home,
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedCageType = newValue;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select cage type' : null,
+                    ),
+                    const SizedBox(height: 20),
+                    // Vaccination status banner (omitted for brevity)
+                    Builder(
+                      builder: (context) {
+                        final bool isVaccinated =
+                            (_vaccinationRecordImageFile != null) ||
+                            (_vaccinationRecordImageUrl != null &&
+                                _vaccinationRecordImageUrl!.isNotEmpty);
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: isVaccinated ? Colors.green : Colors.red,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                isVaccinated ? Icons.verified : Icons.warning,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                isVaccinated
+                                    ? 'Vaccinated (Record Provided)'
+                                    : 'Not Vaccinated (No Record)',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
                       },
                     ),
-                  ],
-                  const SizedBox(height: 10),
-                  _buildCheckboxField('Evening Feeding', _eveningFeeding, (
-                    bool? newValue,
-                  ) {
-                    setState(() {
-                      _eveningFeeding = newValue!;
-                    });
-                  }),
-                  if (_eveningFeeding) ...[
-                    _buildTimeField(
-                      context,
-                      _eveningTimeController,
-                      'Evening Time',
-                      Icons.access_time,
-                    ),
+                    _buildSectionTitle('Vaccination Record (Optional)'),
                     const SizedBox(height: 10),
-                    _buildFoodGramsField(
-                      controller: _eveningFoodGramsController,
-                      labelText: 'Evening Food Grams',
-                      icon: Icons.scale,
-                      validator: (value) {
-                        if (value!.isNotEmpty &&
-                            double.tryParse(value) == null) {
-                          return 'Please enter a valid number.';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 30),
-                  Center(
-                    child: _isLoadingForm
-                        ? const CircularProgressIndicator(
-                            color: Colors.deepPurple,
-                          )
-                        : ElevatedButton(
-                            onPressed: _submitPetForm,
+                    // Image upload section (omitted for brevity)
+                    Center(
+                      child: Column(
+                        children: [
+                          if (_vaccinationRecordImageFile != null)
+                            Stack(
+                              children: [
+                                Container(
+                                  height: 150,
+                                  width: 150,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    image: DecorationImage(
+                                      image: FileImage(
+                                        _vaccinationRecordImageFile!,
+                                      ),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 5,
+                                  right: 5,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.8),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _vaccinationRecordImageFile = null;
+                                          _vaccinationRecordImageUrl = null;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else if (_vaccinationRecordImageUrl != null &&
+                              _vaccinationRecordImageUrl!.isNotEmpty)
+                            Stack(
+                              children: [
+                                Container(
+                                  height: 150,
+                                  width: 150,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    image: DecorationImage(
+                                      image: NetworkImage(
+                                        _vaccinationRecordImageUrl!,
+                                      ),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 5,
+                                  right: 5,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.8),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _vaccinationRecordImageUrl = null;
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            const Text('No vaccination record image selected.'),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: () => _pickImage(
+                              (file) => setState(() {
+                                _vaccinationRecordImageFile = file;
+                                _vaccinationRecordImageUrl = null;
+                              }),
+                              context,
+                            ),
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Upload Vaccination Record'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange.shade700,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 50,
-                                vertical: 15,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                            ),
-                            child: Text(
-                              _editingPet == null
-                                  ? 'Register Pet'
-                                  : 'Update Pet',
                             ),
                           ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildSectionTitle('Feeding Details (Optional)'),
+                    const SizedBox(height: 10),
+                    // Food Brand Dropdown
+                    _buildDropdownField(
+                      value: _selectedFoodBrand,
+                      items: _foodBrands,
+                      labelText: 'Preferred Food Brand',
+                      icon: Icons.fastfood,
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedFoodBrand = newValue;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select a food brand' : null,
+                    ),
+                    const SizedBox(height: 10),
+                    _buildCheckboxField(
+                      'I will bring my pet\'s own food',
+                      _bringOwnFood,
+                      (bool? newValue) {
+                        setState(() {
+                          _bringOwnFood = newValue ?? false;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _buildTextField(
+                      controller: _numberOfMealsController,
+                      labelText: 'Number of Meals per day',
+                      icon: Icons.format_list_numbered,
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value!.isNotEmpty &&
+                            double.tryParse(value) == null) {
+                          return 'Please enter a valid number, or leave empty.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _buildCheckboxField('Morning Feeding', _morningFeeding, (
+                      bool? newValue,
+                    ) {
+                      setState(() {
+                        _morningFeeding = newValue!;
+                      });
+                    }),
+                    if (_morningFeeding) ...[
+                      _buildTimeField(
+                        context,
+                        _morningTimeController,
+                        'Morning Time',
+                        Icons.access_time,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildFoodGramsField(
+                        controller: _morningFoodGramsController,
+                        labelText: 'Morning Food Grams',
+                        icon: Icons.scale,
+                        validator: (value) {
+                          if (value!.isNotEmpty &&
+                              double.tryParse(value) == null) {
+                            return 'Please enter a valid number.';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    _buildCheckboxField(
+                      'Afternoon Feeding',
+                      _afternoonFeeding,
+                      (bool? newValue) {
+                        setState(() {
+                          _afternoonFeeding = newValue!;
+                        });
+                      },
+                    ),
+                    if (_afternoonFeeding) ...[
+                      _buildTimeField(
+                        context,
+                        _afternoonTimeController,
+                        'Afternoon Time',
+                        Icons.access_time,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildFoodGramsField(
+                        controller: _afternoonFoodGramsController,
+                        labelText: 'Afternoon Food Grams',
+                        icon: Icons.scale,
+                        validator: (value) {
+                          if (value!.isNotEmpty &&
+                              double.tryParse(value) == null) {
+                            return 'Please enter a valid number.';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    _buildCheckboxField('Evening Feeding', _eveningFeeding, (
+                      bool? newValue,
+                    ) {
+                      setState(() {
+                        _eveningFeeding = newValue!;
+                      });
+                    }),
+                    if (_eveningFeeding) ...[
+                      _buildTimeField(
+                        context,
+                        _eveningTimeController,
+                        'Evening Time',
+                        Icons.access_time,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildFoodGramsField(
+                        controller: _eveningFoodGramsController,
+                        labelText: 'Evening Food Grams',
+                        icon: Icons.scale,
+                        validator: (value) {
+                          if (value!.isNotEmpty &&
+                              double.tryParse(value) == null) {
+                            return 'Please enter a valid number.';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 30),
+                    Center(
+                      child: _isLoadingForm
+                          ? const CircularProgressIndicator(
+                              color: Colors.deepPurple,
+                            )
+                          : ElevatedButton(
+                              onPressed: _submitPetForm,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange.shade700,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 50,
+                                  vertical: 15,
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                _editingPet == null
+                                    ? 'Register Pet'
+                                    : 'Update Pet',
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
+          )
+        else
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('petsp')
+                  .where('ownerUserId', isEqualTo: _currentUser!.uid)
+                  .orderBy('registeredAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                bool hasRegisteredPets =
+                    snapshot.hasData && snapshot.data!.docs.isNotEmpty;
+
+                if (!hasRegisteredPets) {
+                  return const SizedBox.shrink();
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                return ListView.builder(
+                  itemCount: snapshot.data!.docs.length,
+                  itemBuilder: (context, index) {
+                    var petDoc = snapshot.data!.docs[index];
+                    var petData = petDoc.data() as Map<String, dynamic>;
+
+                    final String petName =
+                        petData['petName'] as String? ?? 'N/A';
+                    final String petType =
+                        petData['petType'] as String? ?? 'N/A';
+                    final String petBreed =
+                        petData['petBreed'] as String? ?? 'N/A';
+                    // ... other fields (omitted for brevity)
+
+                    final String petGender =
+                        petData['petGender'] as String? ?? 'N/A';
+                    final String petWeight =
+                        petData['petWeight'] as String? ?? 'N/A';
+                    final String petDob =
+                        petData['dateOfBirth'] as String? ?? 'N/A';
+                    final String cageType =
+                        petData['cageType'] as String? ?? 'N/A';
+                    final String foodBrand =
+                        petData['foodBrand'] as String? ?? 'N/A';
+                    final String numberOfMeals =
+                        petData['numberOfMeals'] as String? ?? 'N/A';
+                    final bool morningFeeding =
+                        petData['morningFeeding'] as bool? ?? false;
+                    final String morningTime =
+                        petData['morningTime'] as String? ?? 'N/A';
+                    final String morningFoodGrams =
+                        petData['morningFoodGrams'] as String? ?? 'N/A';
+                    final bool afternoonFeeding =
+                        petData['afternoonFeeding'] as bool? ?? false;
+                    final String afternoonTime =
+                        petData['afternoonTime'] as String? ?? 'N/A';
+                    final String afternoonFoodGrams =
+                        petData['afternoonFoodGrams'] as String? ?? 'N/A';
+                    final bool eveningFeeding =
+                        petData['eveningFeeding'] as bool? ?? false;
+                    final String eveningTime =
+                        petData['eveningTime'] as String? ?? 'N/A';
+                    final String eveningFoodGrams =
+                        petData['eveningFoodGrams'] as String? ?? 'N/A';
+
+                    final String vaccinationRecordImageUrl =
+                        petData['vaccinationRecordImageUrl'] as String? ?? '';
+                    final String petProfileImageUrl =
+                        petData['petProfileImageUrl'] as String? ?? '';
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                      child: InkWell(
+                        onTap: () {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Viewing details for $petName'),
+                              ),
+                            );
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 30,
+                                    backgroundColor: Colors.deepPurple.shade100,
+                                    backgroundImage:
+                                        petProfileImageUrl.isNotEmpty
+                                        ? NetworkImage(petProfileImageUrl)
+                                        : null,
+                                    child: petProfileImageUrl.isEmpty
+                                        ? Icon(
+                                            Icons.pets_rounded,
+                                            color: Colors.deepPurple.shade700,
+                                            size: 30,
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          petName,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        // Display Pet Breed
+                                        Text(
+                                          '$petType - $petBreed',
+                                          style: TextStyle(
+                                            color: Colors.grey.shade600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.edit,
+                                      color: Colors.blueGrey.shade600,
+                                    ),
+                                    onPressed: () {
+                                      _prefillFormForEdit(petDoc);
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () async {
+                                      final bool?
+                                      confirmDelete = await showDialog(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          title: const Text(
+                                            'Delete Pet Profile?',
+                                          ),
+                                          content: Text(
+                                            'Are you sure you want to delete $petName\'s profile? This action cannot be undone.',
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.of(ctx).pop(false),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            ElevatedButton(
+                                              onPressed: () =>
+                                                  Navigator.of(ctx).pop(true),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.red,
+                                              ),
+                                              child: const Text(
+                                                'Delete',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+
+                                      if (confirmDelete == true) {
+                                        try {
+                                          await FirebaseFirestore.instance
+                                              .collection('petsp')
+                                              .doc(petDoc.id)
+                                              .delete();
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  '${petName} deleted successfully!',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Failed to delete ${petName}: ${e.toString()}',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
 
     if (showAppBar) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Register Pet'), // Updated title to reflect change
+          title: const Text('My Pets'),
           backgroundColor: const Color(0xFFFFB64A),
           foregroundColor: Colors.white,
           leading: IconButton(
